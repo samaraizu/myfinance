@@ -110,5 +110,5 @@ npm run deploy
 ```bash
 npm test       # 純粋ロジックのテスト（Node 18+）
 npm run push   # GASへ反映
-npm run open   # エディタを開く
+npm run open   # エディタを開く（clasp v3）
 ```

@@ -6,7 +6,7 @@
   "scripts": {
     "login": "clasp login",
     "push": "clasp push -f",
-    "open": "clasp open",
+    "open": "clasp open-script",
     "deploy": "clasp deploy -d \"web app\"",
     "test": "node --test test/*.test.js"
   },
