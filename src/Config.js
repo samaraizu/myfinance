@@ -2,7 +2,7 @@
  * 設定値と定数。秘密情報はここに書かず、スクリプトプロパティで管理する。
  */
 const CONFIG = {
-  DEFAULT_MODEL: 'gemini-2.5-flash',
+  DEFAULT_MODEL: 'gemini-3.8-flash',
   MAX_FILES_PER_RUN: 5, // 無料枠のレート制限対策
   INTERVAL_MS: 4000, // 連続処理時のAPI呼び出し間隔
   RETRY_WAIT_MS: 5000,
