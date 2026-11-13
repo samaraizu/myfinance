@@ -24,12 +24,18 @@
     .month { background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 16px; }
     .month small { color: var(--sub); display: block; }
     .month strong { font-size: 32px; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
-    .shoot {
-      display: flex; align-items: center; justify-content: center; width: 100%;
-      height: 120px; border: 2px dashed var(--line); border-radius: 16px; background: var(--card);
-      color: var(--accent); font-size: 17px; font-weight: 600; cursor: pointer; overflow: hidden;
+    .pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pick {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      height: 96px; border: 2px dashed var(--line); border-radius: 16px; background: var(--card);
+      color: var(--accent); font-size: 15px; font-weight: 600; cursor: pointer;
     }
-    .shoot img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .pick span { font-size: 26px; line-height: 1; }
+    .preview { display: none; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; margin-top: 12px; }
+    .preview img, .preview div {
+      width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 10px; background: var(--card);
+    }
+    .preview div { display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--sub); padding: 4px; word-break: break-all; }
     input[type=file] { display: none; }
     button.send {
       width: 100%; margin-top: 12px; padding: 16px; border: 0; border-radius: 14px;
@@ -39,7 +45,7 @@
     .status { margin: 12px 0; color: var(--sub); min-height: 1.5em; }
     .status.err { color: var(--err); }
     .alert { background: var(--warn-bg); color: var(--warn); border-radius: 12px; padding: 12px; margin: 12px 0; }
-    .result { background: var(--card); border-radius: 16px; padding: 16px; display: none; }
+    .result { background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
     .result h2 { font-size: 17px; margin: 0; }
     .result .meta { color: var(--sub); font-size: 13px; margin-bottom: 8px; }
     table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
@@ -58,22 +64,27 @@
     <strong id="monthTotal">—</strong>
   </div>
 
-  <label class="shoot" id="shoot">
-    <span id="shootLabel">📷 レシートを撮影</span>
-    <input type="file" id="file" accept="image/*" capture="environment">
-  </label>
+  <div class="pickers">
+    <label class="pick"><span>📷</span>撮影する
+      <input type="file" id="camera" accept="image/*" capture="environment">
+    </label>
+    <label class="pick"><span>🖼️</span>写真から選ぶ
+      <input type="file" id="library" accept="image/*,application/pdf" multiple>
+    </label>
+  </div>
+  <div class="preview" id="preview"></div>
   <button class="send" id="send" disabled>送信して読み取る</button>
 
   <div class="status" id="status"></div>
-  <div id="alert"></div>
-  <div class="result" id="result"></div>
+  <div id="results"></div>
   <div class="footer"><a id="sheetLink" href="#" target="_blank" rel="noopener" hidden>スプレッドシートを開く</a></div>
 
   <script>
     const MAX_EDGE = 1600;
+    const MAX_BATCH = 20; // 1回にまとめて送れる枚数（無料枠のレート制限と端末メモリを考慮）
     const yen = (n) => '¥' + Number(n || 0).toLocaleString('ja-JP');
     const $ = (id) => document.getElementById(id);
-    let payload = null;
+    let queue = [];
 
     $('monthLabel').textContent = `${new Date().getMonth() + 1}月の支出`;
 
@@ -108,62 +119,78 @@
           canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
           const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
           URL.revokeObjectURL(url);
-          resolve({ preview: dataUrl, base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
+          resolve({ name: file.name, takenAt: file.lastModified, preview: dataUrl, base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
         };
         img.onerror = () => {
           const reader = new FileReader();
-          reader.onload = () => resolve({ preview: null, base64: String(reader.result).split(',')[1], mimeType: file.type });
+          reader.onload = () => resolve({ name: file.name, takenAt: file.lastModified, preview: null, base64: String(reader.result).split(',')[1], mimeType: file.type });
           reader.readAsDataURL(file);
         };
         img.src = url;
       });
     }
 
-    $('file').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+    async function onPick(e) {
+      let files = Array.from(e.target.files || []);
+      e.target.value = '';
+      if (!files.length) return;
+      const skipped = Math.max(0, files.length - MAX_BATCH);
+      files = files.slice(0, MAX_BATCH);
       setStatus('画像を準備中…');
-      payload = await prepare(file);
-      $('shootLabel').innerHTML = payload.preview ? `<img src="${payload.preview}" alt="">` : esc(file.name);
+      queue = await Promise.all(files.map(prepare));
+      $('preview').innerHTML = queue.map((q) => q.preview ? `<img src="${q.preview}" alt="">` : `<div>${esc(q.name)}</div>`).join('');
+      $('preview').style.display = 'grid';
       $('send').disabled = false;
-      setStatus('');
-    });
+      $('send').textContent = queue.length > 1 ? `${queue.length}枚を送信して読み取る` : '送信して読み取る';
+      setStatus(skipped ? `1回に送れるのは${MAX_BATCH}枚までです。残り${skipped}枚は次に選び直してください。` : '');
+    }
+    $('camera').addEventListener('change', onPick);
+    $('library').addEventListener('change', onPick);
 
-    $('send').addEventListener('click', () => {
-      if (!payload) return;
+    function upload(item) {
+      return new Promise((resolve) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler((err) => resolve({ status: 'error', message: err.message }))
+          .uploadReceipt(item.base64, item.mimeType, item.takenAt);
+      });
+    }
+
+    $('send').addEventListener('click', async () => {
+      if (!queue.length) return;
+      const items = queue;
+      queue = [];
       $('send').disabled = true;
-      $('alert').innerHTML = '';
-      $('result').style.display = 'none';
-      setStatus('読み取り中…（10〜30秒）');
-      google.script.run
-        .withSuccessHandler(render)
-        .withFailureHandler((err) => { setStatus(err.message, true); $('send').disabled = false; })
-        .uploadReceipt(payload.base64, payload.mimeType);
+      $('results').innerHTML = '';
+      const summary = { ok: 0, queued: 0, error: 0 };
+      for (let i = 0; i < items.length; i++) {
+        setStatus(items.length > 1 ? `読み取り中… ${i + 1} / ${items.length}` : '読み取り中…（10〜30秒）');
+        const res = await upload(items[i]);
+        if (res.monthTotal != null) setMonthTotal(res.monthTotal);
+        summary[res.status === 'ok' ? 'ok' : res.status === 'queued' ? 'queued' : 'error']++;
+        $('results').insertAdjacentHTML('afterbegin', card(res, items[i]));
+      }
+      $('preview').style.display = 'none';
+      $('preview').innerHTML = '';
+      $('send').textContent = '送信して読み取る';
+      setStatus(items.length > 1
+        ? `完了：記録 ${summary.ok}件` + (summary.queued ? `／後で自動記録 ${summary.queued}件` : '') + (summary.error ? `／失敗 ${summary.error}件` : '')
+        : summary.ok ? '記録しました' : '', summary.error > 0 && summary.ok === 0 && summary.queued === 0);
     });
 
-    function render(res) {
-      setMonthTotal(res.monthTotal);
-      payload = null;
-      $('file').value = '';
-      $('shootLabel').textContent = '📷 次のレシートを撮影';
-
+    function card(res, item) {
       if (res.status === 'queued') {
-        setStatus(res.reason === 'busy'
-          ? '保存しました。Geminiが混雑しているため、10分おきの自動処理で記録されます。撮り直しは不要です。'
-          : '保存しました。自動処理中のため、数分後に記録されます。');
-        return;
+        return `<div class="alert">${esc(item.name)}：${res.reason === 'busy'
+          ? 'Geminiが混雑しているため保存のみ。10分おきの自動処理で記録されます。'
+          : '保存しました。自動処理中のため、数分後に記録されます。'}</div>`;
       }
-      if (res.status === 'error') {
-        setStatus(`読み取りに失敗しました: ${res.message}`, true);
-        return;
+      if (res.status !== 'ok') {
+        return `<div class="alert">${esc(item.name)}：読み取りに失敗しました（${esc(res.message || '不明なエラー')}）</div>`;
       }
-      setStatus('記録しました');
       const r = res.receipt;
       const alerts = [];
       if (!r.ok) alerts.push(`明細合計 ${yen(r.itemsSum)} とレシート合計 ${yen(r.total)} が合いません（差額 ${yen(r.diff)}）。スプレッドシートで確認してください。`);
-      if (r.dateGuessed) alerts.push('購入日が読めなかったため、今日の日付で記録しました。');
-      $('alert').innerHTML = alerts.map((a) => `<div class="alert">${esc(a)}</div>`).join('');
-
+      if (r.dateGuessed) alerts.push('購入日が読めなかったため、写真の日付で記録しました。');
       const rows = r.items.map((it) => `
         <tr>
           <td>${esc(it.name)}${it.quantity > 1 ? ` ×${it.quantity}` : ''}<br>
@@ -171,13 +198,14 @@
             ${it.discount ? `<span class="disc">　値引 -${yen(it.discount)}</span>` : ''}</td>
           <td class="amt">${yen(it.amount)}</td>
         </tr>`).join('');
-      $('result').innerHTML = `
-        <h2>${esc(r.store)}</h2>
-        <div class="meta">${esc(r.date)}　${r.items.length}品目${r.tax != null ? `　税 ${yen(r.tax)}` : ''}</div>
-        <table><tbody>${rows}</tbody>
-          <tfoot><tr><td>合計</td><td class="amt">${yen(r.total)}</td></tr></tfoot>
-        </table>`;
-      $('result').style.display = 'block';
+      return alerts.map((a) => `<div class="alert">${esc(a)}</div>`).join('') + `
+        <div class="result">
+          <h2>${esc(r.store)}</h2>
+          <div class="meta">${esc(r.date)}　${r.items.length}品目${r.tax != null ? `　税 ${yen(r.tax)}` : ''}</div>
+          <table><tbody>${rows}</tbody>
+            <tfoot><tr><td>合計</td><td class="amt">${yen(r.total)}</td></tr></tfoot>
+          </table>
+        </div>`;
     }
   </script>
 </body>

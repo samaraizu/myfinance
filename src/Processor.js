@@ -18,7 +18,7 @@ function processInbox() {
       if (count > 0) Utilities.sleep(CONFIG.INTERVAL_MS);
       count++;
       try {
-        processFile_(ss, file, categories);
+        processFile_(ss, file, categories, takenAtOf_(file));
       } catch (e) {
         // ログ・フォルダ移動は processFile_ 内で済み。混雑中なら残りは次回に回す
         if (e && e.transient) break;
@@ -29,11 +29,19 @@ function processInbox() {
   }
 }
 
+/** ウェブアプリ経由のファイルなら説明欄に残した写真の日付を返す。 */
+function takenAtOf_(file) {
+  const m = String(file.getDescription() || '').match(/takenAt:(\S+)/);
+  const d = m ? new Date(m[1]) : null;
+  return d && !isNaN(d.getTime()) ? d : null;
+}
+
 /**
  * 1ファイルを処理する。ロック取得は呼び出し側の責務。
+ * fallbackDate は購入日が読めないときに使う日付（省略時はファイル作成日）。
  * 成功時は記録内容を返し、失敗時はエラーフォルダへ移動して例外を投げる。
  */
-function processFile_(ss, file, categories) {
+function processFile_(ss, file, categories, fallbackDate) {
   const fileId = file.getId();
   if (isProcessed_(ss, fileId)) {
     file.moveTo(DriveApp.getFolderById(getProp_(PROP.DONE_ID, true)));
@@ -44,7 +52,7 @@ function processFile_(ss, file, categories) {
     const raw = extractReceipt_(file.getBlob(), categories);
     const receipt = normalizeReceipt_(raw, categories, CONFIG.TOTAL_TOLERANCE);
     if (!receipt.date) {
-      receipt.date = Utilities.formatDate(file.getDateCreated(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      receipt.date = Utilities.formatDate(fallbackDate || file.getDateCreated(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
       receipt.dateGuessed = true;
     }
     file.moveTo(DriveApp.getFolderById(getProp_(PROP.DONE_ID, true)));
@@ -52,7 +60,7 @@ function processFile_(ss, file, categories) {
     log_(receipt.ok ? 'INFO' : 'WARN', file,
       `${receipt.store} ¥${receipt.total} / ${receipt.items.length}品目` +
       (receipt.ok ? '' : ` / 明細合計と差額 ${receipt.diff}円`) +
-      (receipt.dateGuessed ? ' / 日付読めずファイル作成日を使用' : ''));
+      (receipt.dateGuessed ? ' / 日付読めず写真の日付を使用' : ''));
     return receipt;
   } catch (e) {
     if (e && e.transient) {
