@@ -5,7 +5,7 @@ const CONFIG = {
   DEFAULT_MODEL: 'gemini-3.8-flash',
   MAX_FILES_PER_RUN: 5, // 無料枠のレート制限対策
   INTERVAL_MS: 4000, // 連続処理時のAPI呼び出し間隔
-  RETRY_WAIT_MS: 5000,
+  RETRY_WAITS_MS: [5000, 15000, 30000], // 混雑時のリトライ間隔（回数＝要素数）
   TOTAL_TOLERANCE: 1, // 明細合計とレシート合計の許容誤差（円）
   TRIGGER_MINUTES: 10,
   SUPPORTED_MIME: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'],

@@ -72,6 +72,11 @@ function parseGeminiResponse_(response) {
   return data;
 }
 
+/** 混雑・一時障害など、時間を置けば通る可能性があるステータスか。 */
+function isRetryableStatus_(code) {
+  return code === 429 || code === 500 || code === 502 || code === 503 || code === 504;
+}
+
 function toNumber_(value) {
   if (typeof value === 'number' && isFinite(value)) return value;
   if (typeof value === 'string') {

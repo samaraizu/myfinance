@@ -1,5 +1,6 @@
 /**
- * Gemini API 呼び出し。APIエラー時は1回だけリトライする。
+ * Gemini API 呼び出し。混雑（429/5xx）は間隔を空けてリトライし、
+ * それでもダメなら transient フラグ付きの例外を投げる（呼び出し側で後回しにする）。
  */
 function extractReceipt_(blob, categories) {
   const apiKey = getProp_(PROP.API_KEY, true);
@@ -28,21 +29,23 @@ function extractReceipt_(blob, categories) {
   };
 
   let lastError;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0) Utilities.sleep(CONFIG.RETRY_WAIT_MS);
+  for (let attempt = 0; attempt <= CONFIG.RETRY_WAITS_MS.length; attempt++) {
+    if (attempt > 0) Utilities.sleep(CONFIG.RETRY_WAITS_MS[attempt - 1]);
+    let res;
     try {
-      const res = UrlFetchApp.fetch(url, options);
-      const code = res.getResponseCode();
-      const body = res.getContentText();
-      if (code !== 200) {
-        lastError = new Error(`Gemini API ${code}: ${body.slice(0, 300)}`);
-        if (code === 400 || code === 401 || code === 403 || code === 404) break; // リトライしても直らない
-        continue;
-      }
-      return parseGeminiResponse_(JSON.parse(body));
+      res = UrlFetchApp.fetch(url, options);
     } catch (e) {
-      lastError = e;
+      lastError = e; // ネットワーク断・タイムアウト
+      lastError.transient = true;
+      continue;
     }
+    const code = res.getResponseCode();
+    const body = res.getContentText();
+    if (code === 200) return parseGeminiResponse_(JSON.parse(body));
+
+    lastError = new Error(`Gemini API ${code}: ${body.slice(0, 300)}`);
+    if (!isRetryableStatus_(code)) throw lastError; // 400/401/403/404 はリトライしても直らない
+    lastError.transient = true;
   }
   throw lastError;
 }

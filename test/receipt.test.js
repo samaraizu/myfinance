@@ -88,3 +88,9 @@ test('スキーマのカテゴリ列挙にマスタが入る', () => {
   const schema = buildResponseSchema(['肉', 'その他']);
   assert.deepEqual(Array.from(schema.properties.items.items.properties.category.enum), ['肉', 'その他']);
 });
+
+test('リトライ対象ステータスの判定', () => {
+  const isRetryable = g('isRetryableStatus_');
+  for (const c of [429, 500, 502, 503, 504]) assert.equal(isRetryable(c), true, String(c));
+  for (const c of [400, 401, 403, 404]) assert.equal(isRetryable(c), false, String(c));
+});

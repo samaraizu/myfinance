@@ -148,7 +148,9 @@
       $('shootLabel').textContent = '📷 次のレシートを撮影';
 
       if (res.status === 'queued') {
-        setStatus('保存しました。自動処理中のため、数分後に記録されます。');
+        setStatus(res.reason === 'busy'
+          ? '保存しました。Geminiが混雑しているため、10分おきの自動処理で記録されます。撮り直しは不要です。'
+          : '保存しました。自動処理中のため、数分後に記録されます。');
         return;
       }
       if (res.status === 'error') {

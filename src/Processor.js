@@ -20,7 +20,8 @@ function processInbox() {
       try {
         processFile_(ss, file, categories);
       } catch (e) {
-        // processFile_ 内でエラーフォルダ移動・ログ済み
+        // ログ・フォルダ移動は processFile_ 内で済み。混雑中なら残りは次回に回す
+        if (e && e.transient) break;
       }
     }
   } finally {
@@ -54,6 +55,11 @@ function processFile_(ss, file, categories) {
       (receipt.dateGuessed ? ' / 日付読めずファイル作成日を使用' : ''));
     return receipt;
   } catch (e) {
+    if (e && e.transient) {
+      // 一時的な混雑：受信フォルダに残し、次回のトリガーで再処理
+      log_('WARN', file, `Gemini混雑のため後で再処理: ${e.message}`);
+      throw e;
+    }
     try {
       file.moveTo(DriveApp.getFolderById(getProp_(PROP.ERROR_ID, true)));
     } catch (moveError) {
