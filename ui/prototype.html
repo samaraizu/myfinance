@@ -1,0 +1,322 @@
+<title>myfinance 今月の財布</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: 通帳のような1画面。左=予算と欲しいもの（判断）、右=明細（根拠）。スマホは縦積み */
+:root{
+  --bg:#EDF1EE; --surface:#FBFCFB; --ink:#16211C; --muted:#5E6B64; --line:#D3DBD6;
+  --spent:#16211C; --accent:#0E6B57; --accent-soft:#D5E8E1;
+  --plan:#B9790C; --plan-soft:#F6E7C8;
+  --ok:#0E6B57; --warn:#B9790C; --bad:#B4372B; --bad-soft:#F5DAD6;
+  --font-jp:"Zen Kaku Gothic New",system-ui,-apple-system,"Hiragino Sans",sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F1512; --surface:#16201B; --ink:#E4EDE8; --muted:#94A39B; --line:#2A3832;
+  --spent:#E4EDE8; --accent:#4FC2A2; --accent-soft:#1D3A31;
+  --plan:#E2A93E; --plan-soft:#3A2E16;
+  --ok:#4FC2A2; --warn:#E2A93E; --bad:#EE7A6C; --bad-soft:#3E211D; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1512; --surface:#16201B; --ink:#E4EDE8; --muted:#94A39B; --line:#2A3832;
+  --spent:#E4EDE8; --accent:#4FC2A2; --accent-soft:#1D3A31;
+  --plan:#E2A93E; --plan-soft:#3A2E16;
+  --ok:#4FC2A2; --warn:#E2A93E; --bad:#EE7A6C; --bad-soft:#3E211D; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-jp);font-size:14px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:16px}
+.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px}
+.top h1{margin:0;font-size:22px;font-weight:900;letter-spacing:.02em}
+.top h1 small{font-size:13px;font-weight:500;color:var(--muted);margin-left:8px}
+.sync{display:flex;flex-wrap:wrap;gap:6px}
+.src{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 10px;background:var(--surface)}
+.src b{color:var(--ink);font-weight:500}
+.sample{font-size:11px;color:var(--plan);font-weight:700;letter-spacing:.06em}
+
+.grid{display:grid;gap:16px;grid-template-columns:1fr}
+@media (min-width:960px){.grid{grid-template-columns:minmax(0,5fr) minmax(0,6fr);align-items:start}}
+.col{display:grid;gap:16px;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+.panel h2{margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.panel h2 span{letter-spacing:0;font-weight:500}
+
+/* 予算メーター */
+.hero-row{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.free-label{font-size:12px;color:var(--muted)}
+.free{font-size:44px;font-weight:600;line-height:1.05}
+.free.neg{color:var(--bad)}
+.perday{font-size:12px;color:var(--muted);text-align:right}
+.perday .num{font-size:18px;color:var(--ink);display:block}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;margin-top:6px}
+.pill.ok{background:var(--accent-soft);color:var(--ok)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+
+.meter{position:relative;margin:22px 0 8px;height:34px;border-radius:8px;background:var(--bg);border:1px solid var(--line);overflow:visible}
+.meter .seg{position:absolute;top:0;bottom:0;transition:width .35s ease,left .35s ease}
+.seg.spent{left:0;background:var(--spent);border-radius:7px 0 0 7px}
+.seg.plan{background:repeating-linear-gradient(-45deg,var(--plan) 0 5px,var(--plan-soft) 5px 9px)}
+.seg.over{background:var(--bad)}
+.pace{position:absolute;top:-8px;bottom:-8px;width:0;border-left:2px dashed var(--accent)}
+.pace span{position:absolute;top:-18px;left:-30px;width:60px;text-align:center;font-size:10px;color:var(--accent);font-weight:700;white-space:nowrap}
+.scale{display:flex;justify-content:space-between;font-size:10px;color:var(--muted)}
+.legend{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
+.legend div{border-top:3px solid var(--line);padding-top:6px}
+.legend .l-spent{border-color:var(--spent)}
+.legend .l-plan{border-color:var(--plan)}
+.legend .l-free{border-color:var(--accent)}
+.legend small{display:block;font-size:11px;color:var(--muted)}
+.legend .num{font-size:16px;font-weight:500}
+
+/* カテゴリ */
+.cats{display:grid;gap:6px}
+.cat{display:grid;grid-template-columns:6.5em minmax(0,1fr) 5.8em;align-items:center;gap:10px;padding:4px 6px;margin:0 -6px;border-radius:8px;cursor:pointer;border:0;background:none;color:inherit;font:inherit;text-align:left}
+.cat:hover,.cat.active{background:var(--accent-soft)}
+.cat:focus-visible,.wish:focus-within,.chip-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.cat .bar{height:8px;border-radius:4px;background:var(--bg);overflow:hidden;display:flex}
+.cat .bar i{display:block;height:100%;background:var(--accent)}
+.cat .bar i.p{background:var(--plan)}
+.cat .num{text-align:right;font-size:13px}
+.cat-note{font-size:11px;color:var(--muted);margin-top:8px}
+
+/* 欲しいもの */
+.wishes{display:grid;gap:8px}
+.wish{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.wish.on{border-color:var(--plan);background:var(--plan-soft)}
+.wish input{width:18px;height:18px;accent-color:var(--plan);margin:0}
+.wish .name{font-weight:500;overflow-wrap:anywhere}
+.wish .meta{font-size:11px;color:var(--muted)}
+.wish .num{font-size:14px;font-weight:500}
+.prio{font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:6px;vertical-align:1px;border:1px solid currentColor}
+.prio.h{color:var(--bad)} .prio.m{color:var(--plan)} .prio.l{color:var(--muted)}
+.wish-foot{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:10px;gap:8px;flex-wrap:wrap}
+.wish-foot b{color:var(--plan)}
+
+/* 突合 */
+.match{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:14px}
+.match div{background:var(--bg);border-radius:10px;padding:10px 12px}
+.match small{display:block;font-size:11px;color:var(--muted)}
+.match .num{font-size:20px;font-weight:500}
+.match .warn .num{color:var(--warn)}
+
+/* 明細 */
+.filters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.chip-btn{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 12px;cursor:pointer}
+.chip-btn[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.tx{list-style:none;margin:0;padding:0}
+.tx li{display:grid;grid-template-columns:3.4em minmax(0,1fr) auto;gap:4px 12px;padding:12px 0;border-top:1px solid var(--line)}
+.tx li:first-child{border-top:0}
+.tx .d{font-size:12px;color:var(--muted);padding-top:2px}
+.tx .m{font-weight:500;overflow-wrap:anywhere}
+.tx .amt{text-align:right;font-weight:500}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.tag{font-size:10px;font-family:var(--font-num);border-radius:4px;padding:0 6px;border:1px solid var(--line);color:var(--muted)}
+.tag.amz{border-color:var(--plan);color:var(--plan)}
+.tag.rcp{border-color:var(--accent);color:var(--accent)}
+.st{font-size:10px;font-weight:700;border-radius:4px;padding:0 6px}
+.st.ok{background:var(--accent-soft);color:var(--ok)}
+.st.fill{background:var(--plan-soft);color:var(--plan)}
+.st.miss{background:var(--bad-soft);color:var(--bad)}
+.splits{grid-column:2 / 4;display:grid;gap:2px;margin-top:2px;padding-left:10px;border-left:2px solid var(--line)}
+.splits div{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted)}
+.splits em{font-style:normal;color:var(--ink)}
+.tx-foot{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;margin-top:8px;padding-top:10px;border-top:1px solid var(--line)}
+.empty{color:var(--muted);font-size:13px;padding:16px 0}
+@media (max-width:420px){.free{font-size:36px}.legend .num,.match .num{font-size:14px}}
+@media (prefers-reduced-motion:reduce){.meter .seg{transition:none}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>2026年11月<small>20日目 / 30日・残り<span class="num">11</span>日</small></h1>
+    <div class="sync">
+      <span class="src">freee カード <b>11/20 08:12</b></span>
+      <span class="src">Amazon スプシ <b>11/19 23:40</b></span>
+      <span class="src">レシート <b>14枚</b></span>
+      <span class="sample">● サンプルデータ</span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="col">
+      <section class="panel" aria-label="予算">
+        <h2>今月の予算 <span class="num">¥100,000</span></h2>
+        <div class="hero-row">
+          <div>
+            <div class="free-label">欲しいもの込みで自由に使える残り</div>
+            <div class="free num" id="free">¥0</div>
+            <span class="pill ok" id="pacePill">ペース内</span>
+          </div>
+          <div class="perday">1日あたり使える額<span class="num" id="perDay">¥0</span>残り11日で割った額</div>
+        </div>
+        <div class="meter" id="meter">
+          <div class="seg spent" id="segSpent"></div>
+          <div class="seg plan" id="segPlan"></div>
+          <div class="seg over" id="segOver"></div>
+          <div class="pace" id="pace"><span>今日の目安</span></div>
+        </div>
+        <div class="scale num"><span>0</span><span>50,000</span><span>100,000</span></div>
+        <div class="legend">
+          <div class="l-spent"><small>使った（カード）</small><span class="num" id="lgSpent"></span></div>
+          <div class="l-plan"><small>買う予定</small><span class="num" id="lgPlan"></span></div>
+          <div class="l-free"><small>目安との差</small><span class="num" id="lgPace"></span></div>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="欲しいものリスト">
+        <h2>欲しいもの <span>チェック＝今月買う</span></h2>
+        <div class="wishes" id="wishes"></div>
+        <div class="wish-foot"><span>今月の予定 <b class="num" id="wishTotal"></b></span><span id="wishHint"></span></div>
+      </section>
+
+      <section class="panel" aria-label="カテゴリ別">
+        <h2>カテゴリ別 <span>タップで明細を絞り込み</span></h2>
+        <div class="cats" id="cats"></div>
+        <div class="cat-note">緑＝使った額、黄＝欲しいもので使う予定。Amazonとレシートの内訳で分割して集計。</div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel" aria-label="明細">
+        <h2>カード明細 <span>freee × Amazon × レシート</span></h2>
+        <div class="match">
+          <div><small>レシート突合</small><span class="num" id="mOk"></span></div>
+          <div><small>内訳で分割</small><span class="num" id="mSplit"></span></div>
+          <div class="warn"><small>レシート待ち</small><span class="num" id="mMiss"></span></div>
+        </div>
+        <div class="filters" id="filters"></div>
+        <ul class="tx" id="tx"></ul>
+        <div class="tx-foot"><span id="txCount"></span><span class="num" id="txSum"></span></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+const BUDGET = 100000, DAY = 20, DAYS = 30;
+const yen = n => (n < 0 ? "-¥" : "¥") + Math.abs(Math.round(n)).toLocaleString("ja-JP");
+
+// source: card=freeeカード明細 / amz=Amazon注文スプシ / rcp=レシート
+// status: ok=レシートと一致 / fill=内訳でカテゴリ補完 / miss=レシート未登録
+const TX = [
+  {d:"11/19", m:"AMAZON.CO.JP", amt:4280, src:["card","amz"], st:"fill",
+    splits:[["洗濯洗剤 詰替 2個","日用品",1280],["USB-C ケーブル 2m","ガジェット",3000]]},
+  {d:"11/18", m:"成城石井 自由が丘店", amt:3612, src:["card","rcp"], st:"ok", cat:"食費"},
+  {d:"11/17", m:"ブルーボトルコーヒー", amt:680, src:["card","rcp"], st:"ok", cat:"カフェ"},
+  {d:"11/16", m:"UBER EATS", amt:2450, src:["card"], st:"ok", cat:"食費"},
+  {d:"11/15", m:"ハンズ 渋谷店", amt:5940, src:["card","rcp"], st:"fill",
+    splits:[["保存容器セット","日用品",2200],["マスキングテープ・画材","趣味",3740]]},
+  {d:"11/14", m:"NETFLIX.COM", amt:1590, src:["card"], st:"ok", cat:"サブスク"},
+  {d:"11/12", m:"ユニクロ 銀座店", amt:7990, src:["card","rcp"], st:"ok", cat:"衣服"},
+  {d:"11/10", m:"AMAZON.CO.JP", amt:12800, src:["card","amz"], st:"fill",
+    splits:[["メカニカルキーボード","ガジェット",12800]]},
+  {d:"11/08", m:"ライフ 中目黒店", amt:4318, src:["card","rcp"], st:"ok", cat:"食費"},
+  {d:"11/06", m:"TOHOシネマズ", amt:2200, src:["card"], st:"ok", cat:"趣味"},
+  {d:"11/05", m:"ENEOS", amt:5600, src:["card"], st:"ok", cat:"交通"},
+  {d:"11/03", m:"ドン・キホーテ", amt:3210, src:["card"], st:"miss", cat:"未分類"},
+  {d:"11/02", m:"SPOTIFY", amt:980, src:["card"], st:"ok", cat:"サブスク"},
+  {d:"11/01", m:"AMAZON.CO.JP", amt:6830, src:["card","amz"], st:"fill",
+    splits:[["コーヒー豆 500g","カフェ",2830],["技術書 2冊","本",4000]]},
+];
+
+let WISH = [
+  {id:"w1", name:"冬用レザーブーツ", cat:"衣服", price:18900, prio:"h", on:true, note:"セール 12/1まで"},
+  {id:"w2", name:"スチーム式加湿器", cat:"日用品", price:5900, prio:"m", on:true, note:"Amazon ほしい物"},
+  {id:"w3", name:"ハンドドリップケトル", cat:"カフェ", price:7480, prio:"l", on:false, note:""},
+  {id:"w4", name:"文庫 3冊", cat:"本", price:2640, prio:"l", on:false, note:"来月でも可"},
+];
+
+let filter = "すべて";
+const lines = TX.flatMap(t => t.splits ? t.splits.map(s => ({cat:s[1], amt:s[2]})) : [{cat:t.cat, amt:t.amt}]);
+const spent = TX.reduce((a,t)=>a+t.amt,0);
+const CAT_ORDER = ["食費","ガジェット","衣服","日用品","交通","カフェ","趣味","本","サブスク","未分類"];
+
+function render(){
+  const plan = WISH.filter(w=>w.on).reduce((a,w)=>a+w.price,0);
+  const free = BUDGET - spent - plan;
+  const ideal = BUDGET * DAY / DAYS;
+  const diff = ideal - spent;
+  const daysLeft = DAYS - DAY + 1;
+
+  // hero
+  const f = document.getElementById("free");
+  f.textContent = yen(free); f.classList.toggle("neg", free < 0);
+  document.getElementById("perDay").textContent = yen(Math.max(free,0)/daysLeft);
+  const pill = document.getElementById("pacePill");
+  if (free < 0){ pill.className="pill bad"; pill.textContent = "予定込みで "+yen(-free)+" オーバー"; }
+  else if (diff < 0){ pill.className="pill bad"; pill.textContent = "目安より "+yen(-diff)+" 使いすぎ"; }
+  else { pill.className="pill ok"; pill.textContent = "ペース内・目安より "+yen(diff)+" 少ない"; }
+
+  // meter
+  const pct = v => Math.min(v,BUDGET)/BUDGET*100;
+  const sp = pct(spent), pl = Math.max(0, pct(spent+plan) - sp);
+  const S = id => document.getElementById(id).style;
+  S("segSpent").width = sp+"%";
+  S("segPlan").left = sp+"%"; S("segPlan").width = pl+"%";
+  const over = Math.max(0, spent+plan-BUDGET);
+  S("segOver").left = (100 - over/BUDGET*100)+"%"; S("segOver").width = (over/BUDGET*100)+"%";
+  S("pace").left = (ideal/BUDGET*100)+"%";
+  document.getElementById("lgSpent").textContent = yen(spent);
+  document.getElementById("lgPlan").textContent = yen(plan);
+  document.getElementById("lgPace").textContent = (diff>=0?"+":"") + yen(diff).replace("-","−");
+
+  // wishes
+  document.getElementById("wishes").innerHTML = WISH.map(w => `
+    <label class="wish ${w.on?"on":""}">
+      <input type="checkbox" id="${w.id}" ${w.on?"checked":""} data-id="${w.id}">
+      <div><div class="name">${w.name}<span class="prio ${w.prio}">${{h:"高",m:"中",l:"低"}[w.prio]}</span></div>
+      <div class="meta">${w.cat}${w.note?"・"+w.note:""}</div></div>
+      <span class="num">${yen(w.price)}</span>
+    </label>`).join("");
+  document.getElementById("wishTotal").textContent = yen(plan);
+  const nextOff = WISH.filter(w=>!w.on).sort((a,b)=>a.price-b.price)[0];
+  document.getElementById("wishHint").textContent = nextOff
+    ? (free - nextOff.price >= 0 ? `「${nextOff.name}」も買うと残り ${yen(free-nextOff.price)}` : `「${nextOff.name}」を足すと ${yen(nextOff.price-free)} オーバー`)
+    : "";
+
+  // categories
+  const byCat = {}; CAT_ORDER.forEach(c=>byCat[c]={s:0,p:0});
+  lines.forEach(l=>byCat[l.cat].s+=l.amt);
+  WISH.filter(w=>w.on).forEach(w=>byCat[w.cat].p+=w.price);
+  const max = Math.max(...CAT_ORDER.map(c=>byCat[c].s+byCat[c].p));
+  document.getElementById("cats").innerHTML = CAT_ORDER.filter(c=>byCat[c].s+byCat[c].p>0)
+    .sort((a,b)=>(byCat[b].s+byCat[b].p)-(byCat[a].s+byCat[a].p))
+    .map(c=>{const v=byCat[c]; return `<button class="cat ${filter===c?"active":""}" data-cat="${c}">
+      <span>${c}</span><span class="bar"><i style="width:${v.s/max*100}%"></i><i class="p" style="width:${v.p/max*100}%"></i></span>
+      <span class="num">${yen(v.s)}${v.p?`<br><small style="color:var(--plan)">+${yen(v.p)}</small>`:""}</span></button>`}).join("");
+
+  // match summary
+  document.getElementById("mOk").textContent = TX.filter(t=>t.st==="ok"&&t.src.includes("rcp")).length+"件";
+  document.getElementById("mSplit").textContent = TX.filter(t=>t.st==="fill").length+"件";
+  document.getElementById("mMiss").textContent = TX.filter(t=>t.st==="miss").length+"件";
+
+  // filters + tx
+  const cats = ["すべて", ...CAT_ORDER.filter(c=>byCat[c].s>0)];
+  document.getElementById("filters").innerHTML = cats.map(c=>`<button class="chip-btn" aria-pressed="${filter===c}" data-cat="${c}">${c}</button>`).join("");
+  const rows = TX.filter(t => filter==="すべて" || (t.splits ? t.splits.some(s=>s[1]===filter) : t.cat===filter));
+  const stLabel = {ok:["ok","一致"], fill:["fill","内訳で補完"], miss:["miss","レシート待ち"]};
+  const srcLabel = {card:["","freee"], amz:["amz","Amazon"], rcp:["rcp","レシート"]};
+  document.getElementById("tx").innerHTML = rows.length ? rows.map(t=>{
+    const st = stLabel[t.st];
+    const tags = t.src.map(s=>`<span class="tag ${srcLabel[s][0]}">${srcLabel[s][1]}</span>`).join("")
+      + (t.cat?`<span class="tag">${t.cat}</span>`:"") + `<span class="st ${st[0]}">${st[1]}</span>`;
+    const splits = t.splits ? `<div class="splits">${t.splits.map(s=>`<div><span>${s[0]}・<em>${s[1]}</em></span><span class="num">${yen(s[2])}</span></div>`).join("")}</div>` : "";
+    return `<li><span class="d num">${t.d}</span><div><div class="m">${t.m}</div><div class="tags">${tags}</div></div><span class="amt num">${yen(t.amt)}</span>${splits}</li>`;
+  }).join("") : `<li class="empty">この分類の明細はまだありません</li>`;
+  const sum = filter==="すべて" ? spent : lines.filter(l=>l.cat===filter).reduce((a,l)=>a+l.amt,0);
+  document.getElementById("txCount").textContent = `${rows.length}件${filter!=="すべて"?"（"+filter+"分のみ集計）":""}`;
+  document.getElementById("txSum").textContent = yen(sum);
+}
+
+document.addEventListener("change", e => {
+  const id = e.target.dataset && e.target.dataset.id;
+  if (id){ WISH = WISH.map(w => w.id===id ? {...w, on:e.target.checked} : w); render(); document.getElementById(id)?.focus(); }
+});
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-cat]");
+  if (b){ const c = b.dataset.cat; filter = (filter===c && c!=="すべて") ? "すべて" : c; render(); }
+});
+render();
+</script>
