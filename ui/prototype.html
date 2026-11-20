@@ -3,222 +3,355 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
-/* Layout: 通帳のような1画面。左=予算と欲しいもの（判断）、右=明細（根拠）。スマホは縦積み */
+/* Layout: スマホ専用の1カラム。上=残り額（判断）→割り勘→欲しいもの→カテゴリ→明細（根拠）。右下の＋で受け取りをボトムシート登録 */
 :root{
   --bg:#EDF1EE; --surface:#FBFCFB; --ink:#16211C; --muted:#5E6B64; --line:#D3DBD6;
   --spent:#16211C; --accent:#0E6B57; --accent-soft:#D5E8E1;
   --plan:#B9790C; --plan-soft:#F6E7C8;
+  --back:#2F5E9E; --back-soft:#DCE6F3;
   --ok:#0E6B57; --warn:#B9790C; --bad:#B4372B; --bad-soft:#F5DAD6;
+  --scrim:rgba(10,18,14,.42);
   --font-jp:"Zen Kaku Gothic New",system-ui,-apple-system,"Hiragino Sans",sans-serif;
   --font-num:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --col:440px;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0F1512; --surface:#16201B; --ink:#E4EDE8; --muted:#94A39B; --line:#2A3832;
   --spent:#E4EDE8; --accent:#4FC2A2; --accent-soft:#1D3A31;
   --plan:#E2A93E; --plan-soft:#3A2E16;
-  --ok:#4FC2A2; --warn:#E2A93E; --bad:#EE7A6C; --bad-soft:#3E211D; color-scheme:dark}}
+  --back:#86B0E8; --back-soft:#1C2A3D;
+  --ok:#4FC2A2; --warn:#E2A93E; --bad:#EE7A6C; --bad-soft:#3E211D;
+  --scrim:rgba(0,0,0,.6); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0F1512; --surface:#16201B; --ink:#E4EDE8; --muted:#94A39B; --line:#2A3832;
   --spent:#E4EDE8; --accent:#4FC2A2; --accent-soft:#1D3A31;
   --plan:#E2A93E; --plan-soft:#3A2E16;
-  --ok:#4FC2A2; --warn:#E2A93E; --bad:#EE7A6C; --bad-soft:#3E211D; color-scheme:dark}
+  --back:#86B0E8; --back-soft:#1C2A3D;
+  --ok:#4FC2A2; --warn:#E2A93E; --bad:#EE7A6C; --bad-soft:#3E211D;
+  --scrim:rgba(0,0,0,.6); color-scheme:dark}
 
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--ink);font-family:var(--font-jp);font-size:14px;line-height:1.6;
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-jp);font-size:15px;line-height:1.6;-webkit-tap-highlight-color:transparent}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 .num{font-family:var(--font-num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-.wrap{max-width:1180px;margin:0 auto;display:grid;gap:16px}
-.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px}
-.top h1{margin:0;font-size:22px;font-weight:900;letter-spacing:.02em}
-.top h1 small{font-size:13px;font-weight:500;color:var(--muted);margin-left:8px}
-.sync{display:flex;flex-wrap:wrap;gap:6px}
-.src{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 10px;background:var(--surface)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{max-width:var(--col);margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 120px;display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+
+/* 上部固定バー */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 0 8px;border-bottom:1px solid transparent;transition:border-color .2s}
+.bar.stuck{border-bottom-color:var(--line)}
+.bar h1{margin:0;font-size:17px;font-weight:900}
+.bar h1 small{font-size:12px;font-weight:500;color:var(--muted);margin-left:6px}
+.mini{font-size:12px;color:var(--muted);text-align:right;opacity:0;transition:opacity .2s}
+.bar.stuck .mini{opacity:1}
+.mini b{font-family:var(--font-num);font-size:15px;color:var(--ink);font-weight:600}
+.sync{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 16px}
+.sync::-webkit-scrollbar{display:none}
+.src{flex:none;font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 10px;background:var(--surface);white-space:nowrap}
 .src b{color:var(--ink);font-weight:500}
-.sample{font-size:11px;color:var(--plan);font-weight:700;letter-spacing:.06em}
+.src.sample{color:var(--plan);border-color:var(--plan);font-weight:700}
 
-.grid{display:grid;gap:16px;grid-template-columns:1fr}
-@media (min-width:960px){.grid{grid-template-columns:minmax(0,5fr) minmax(0,6fr);align-items:start}}
-.col{display:grid;gap:16px;min-width:0}
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
-.panel h2{margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:8px}
-.panel h2 span{letter-spacing:0;font-weight:500}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px}
+.card h2{margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card h2 span{letter-spacing:0;font-weight:500}
 
-/* 予算メーター */
-.hero-row{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+/* 残り額 */
 .free-label{font-size:12px;color:var(--muted)}
-.free{font-size:44px;font-weight:600;line-height:1.05}
+.free{font-size:42px;font-weight:600;line-height:1.1}
 .free.neg{color:var(--bad)}
-.perday{font-size:12px;color:var(--muted);text-align:right}
-.perday .num{font-size:18px;color:var(--ink);display:block}
-.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;margin-top:6px}
+.hero-sub{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
+.pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px}
 .pill.ok{background:var(--accent-soft);color:var(--ok)}
 .pill.bad{background:var(--bad-soft);color:var(--bad)}
-
-.meter{position:relative;margin:22px 0 8px;height:34px;border-radius:8px;background:var(--bg);border:1px solid var(--line);overflow:visible}
+.perday{font-size:12px;color:var(--muted)}
+.perday b{font-family:var(--font-num);color:var(--ink);font-weight:600;font-size:15px}
+.meter{position:relative;margin:26px 0 6px;height:28px;border-radius:8px;background:var(--bg);border:1px solid var(--line)}
 .meter .seg{position:absolute;top:0;bottom:0;transition:width .35s ease,left .35s ease}
 .seg.spent{left:0;background:var(--spent);border-radius:7px 0 0 7px}
 .seg.plan{background:repeating-linear-gradient(-45deg,var(--plan) 0 5px,var(--plan-soft) 5px 9px)}
 .seg.over{background:var(--bad)}
-.pace{position:absolute;top:-8px;bottom:-8px;width:0;border-left:2px dashed var(--accent)}
-.pace span{position:absolute;top:-18px;left:-30px;width:60px;text-align:center;font-size:10px;color:var(--accent);font-weight:700;white-space:nowrap}
+.pace{position:absolute;top:-7px;bottom:-7px;width:0;border-left:2px dashed var(--accent)}
+.pace span{position:absolute;top:-19px;left:-30px;width:60px;text-align:center;font-size:10px;color:var(--accent);font-weight:700;white-space:nowrap}
 .scale{display:flex;justify-content:space-between;font-size:10px;color:var(--muted)}
-.legend{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
-.legend div{border-top:3px solid var(--line);padding-top:6px}
+.legend{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
+.legend div{border-top:3px solid var(--line);padding-top:4px}
 .legend .l-spent{border-color:var(--spent)}
 .legend .l-plan{border-color:var(--plan)}
 .legend .l-free{border-color:var(--accent)}
 .legend small{display:block;font-size:11px;color:var(--muted)}
-.legend .num{font-size:16px;font-weight:500}
+.legend .num{font-size:14px;font-weight:500}
+.netline{margin-top:10px;font-size:12px;color:var(--muted);background:var(--bg);border-radius:8px;padding:7px 10px}
+.netline b{color:var(--back);font-weight:500}
+.netline i{font-style:normal;color:var(--warn)}
 
-/* カテゴリ */
-.cats{display:grid;gap:6px}
-.cat{display:grid;grid-template-columns:6.5em minmax(0,1fr) 5.8em;align-items:center;gap:10px;padding:4px 6px;margin:0 -6px;border-radius:8px;cursor:pointer;border:0;background:none;color:inherit;font:inherit;text-align:left}
-.cat:hover,.cat.active{background:var(--accent-soft)}
-.cat:focus-visible,.wish:focus-within,.chip-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.cat .bar{height:8px;border-radius:4px;background:var(--bg);overflow:hidden;display:flex}
-.cat .bar i{display:block;height:100%;background:var(--accent)}
-.cat .bar i.p{background:var(--plan)}
-.cat .num{text-align:right;font-size:13px}
-.cat-note{font-size:11px;color:var(--muted);margin-top:8px}
+/* 割り勘 */
+.back-sum{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.back-sum div{background:var(--bg);border-radius:10px;padding:8px 12px}
+.back-sum small{display:block;font-size:11px;color:var(--muted)}
+.back-sum .num{font-size:18px;font-weight:500}
+.back-sum .in .num{color:var(--back)}
+.back-sum .wait .num{color:var(--warn)}
+.backs{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.backs li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 10px;align-items:center;min-height:56px;padding:8px 10px;border-radius:10px;border:1px solid var(--line)}
+.backs li.pending{border-style:dashed;border-color:var(--warn)}
+.backs .who{font-weight:500}
+.backs .link{font-size:11px;color:var(--muted);grid-column:1;overflow-wrap:anywhere}
+.backs .right{grid-row:1 / 3;grid-column:2;text-align:right;display:grid;gap:4px;justify-items:end}
+.backs .num{font-weight:500;color:var(--back)}
+.backs li.pending .num{color:var(--warn)}
+.more{font:inherit;font-size:12px;color:var(--back);background:none;border:0;padding:10px 0 0;cursor:pointer;width:100%;text-align:center}
+
+.btn{font:inherit;font-size:15px;font-weight:700;border-radius:12px;min-height:48px;padding:0 18px;cursor:pointer;border:1px solid var(--back);background:var(--back);color:var(--surface)}
+.btn.ghost{background:transparent;color:var(--back)}
+.btn.sm{font-size:12px;min-height:32px;padding:0 12px;border-radius:8px}
 
 /* 欲しいもの */
 .wishes{display:grid;gap:8px}
-.wish{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.wish{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;min-height:56px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;cursor:pointer}
 .wish.on{border-color:var(--plan);background:var(--plan-soft)}
-.wish input{width:18px;height:18px;accent-color:var(--plan);margin:0}
-.wish .name{font-weight:500;overflow-wrap:anywhere}
+.wish input{width:22px;height:22px;accent-color:var(--plan);margin:0}
+.wish .name{font-weight:500;overflow-wrap:anywhere;line-height:1.4}
 .wish .meta{font-size:11px;color:var(--muted)}
 .wish .num{font-size:14px;font-weight:500}
-.prio{font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:6px;vertical-align:1px;border:1px solid currentColor}
+.prio{font-size:10px;font-weight:700;padding:0 5px;border-radius:4px;margin-left:6px;vertical-align:2px;border:1px solid currentColor}
 .prio.h{color:var(--bad)} .prio.m{color:var(--plan)} .prio.l{color:var(--muted)}
-.wish-foot{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:10px;gap:8px;flex-wrap:wrap}
+.wish-foot{font-size:12px;color:var(--muted);margin-top:10px;display:grid;gap:2px}
 .wish-foot b{color:var(--plan)}
 
-/* 突合 */
-.match{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:14px}
-.match div{background:var(--bg);border-radius:10px;padding:10px 12px}
-.match small{display:block;font-size:11px;color:var(--muted)}
-.match .num{font-size:20px;font-weight:500}
-.match .warn .num{color:var(--warn)}
+/* カテゴリ */
+.cats{display:grid;gap:2px}
+.cat{display:grid;grid-template-columns:5.6em minmax(0,1fr) 5.4em;align-items:center;gap:10px;min-height:40px;padding:0 8px;margin:0 -8px;border-radius:8px;cursor:pointer;border:0;background:none;color:inherit;font:inherit;font-size:14px;text-align:left}
+.cat.active{background:var(--accent-soft)}
+.cat .bar2{height:8px;border-radius:4px;background:var(--bg);overflow:hidden;display:flex}
+.cat .bar2 i{display:block;height:100%;background:var(--accent)}
+.cat .bar2 i.p{background:var(--plan)}
+.cat .num{text-align:right;font-size:13px;line-height:1.25}
+.cat small{color:var(--plan);font-size:11px}
 
 /* 明細 */
-.filters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
-.chip-btn{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 12px;cursor:pointer}
-.chip-btn[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
-.tx{list-style:none;margin:0;padding:0}
-.tx li{display:grid;grid-template-columns:3.4em minmax(0,1fr) auto;gap:4px 12px;padding:12px 0;border-top:1px solid var(--line)}
+.match{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.match span{font-size:11px;border-radius:999px;padding:2px 10px;background:var(--bg);color:var(--muted)}
+.match b{font-family:var(--font-num);color:var(--ink);font-weight:500}
+.match .warn b{color:var(--warn)}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px 6px;padding:2px 16px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;min-height:34px;padding:0 14px;cursor:pointer;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.tx{list-style:none;margin:4px 0 0;padding:0}
+.tx li{display:grid;grid-template-columns:2.9em minmax(0,1fr) auto;gap:2px 10px;padding:12px 0;border-top:1px solid var(--line)}
 .tx li:first-child{border-top:0}
 .tx .d{font-size:12px;color:var(--muted);padding-top:2px}
-.tx .m{font-weight:500;overflow-wrap:anywhere}
+.tx .m{font-weight:500;overflow-wrap:anywhere;line-height:1.4}
 .tx .amt{text-align:right;font-weight:500}
+.tx .amt s{display:block;font-size:11px;color:var(--muted);font-weight:400}
 .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
-.tag{font-size:10px;font-family:var(--font-num);border-radius:4px;padding:0 6px;border:1px solid var(--line);color:var(--muted)}
+.tag{font-size:10px;font-family:var(--font-num);border-radius:4px;padding:0 5px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.tag.card{background:var(--bg)}
 .tag.amz{border-color:var(--plan);color:var(--plan)}
 .tag.rcp{border-color:var(--accent);color:var(--accent)}
-.st{font-size:10px;font-weight:700;border-radius:4px;padding:0 6px}
+.st{font-size:10px;font-weight:700;border-radius:4px;padding:0 5px;white-space:nowrap}
 .st.ok{background:var(--accent-soft);color:var(--ok)}
 .st.fill{background:var(--plan-soft);color:var(--plan)}
 .st.miss{background:var(--bad-soft);color:var(--bad)}
-.splits{grid-column:2 / 4;display:grid;gap:2px;margin-top:2px;padding-left:10px;border-left:2px solid var(--line)}
+.splits{grid-column:2 / 4;display:grid;gap:1px;margin-top:4px;padding-left:10px;border-left:2px solid var(--line)}
+.splits.back{border-left-color:var(--back)}
 .splits div{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted)}
 .splits em{font-style:normal;color:var(--ink)}
-.tx-foot{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;margin-top:8px;padding-top:10px;border-top:1px solid var(--line)}
-.empty{color:var(--muted);font-size:13px;padding:16px 0}
-@media (max-width:420px){.free{font-size:36px}.legend .num,.match .num{font-size:14px}}
-@media (prefers-reduced-motion:reduce){.meter .seg{transition:none}}
+.splits .in{color:var(--back)}
+.splits .wait{color:var(--warn)}
+.tx-foot{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;margin-top:6px;padding-top:10px;border-top:1px solid var(--line)}
+.empty{color:var(--muted);font-size:13px;padding:16px 0;display:block!important}
+
+/* 右下ボタン */
+.fab{position:fixed;z-index:6;bottom:calc(16px + env(safe-area-inset-bottom,0px));right:max(calc(16px + env(safe-area-inset-right,0px)),calc((100vw - var(--col)) / 2 + 16px));
+  display:flex;align-items:center;gap:6px;font:inherit;font-size:15px;font-weight:700;min-height:56px;padding:0 20px;border-radius:999px;border:0;background:var(--back);color:var(--surface);box-shadow:0 6px 20px rgba(20,40,70,.28);cursor:pointer}
+.fab span{font-size:22px;line-height:1;font-weight:400}
+
+/* ボトムシート */
+.scrim{position:fixed;inset:0;z-index:20;background:var(--scrim)}
+.sheet{position:fixed;z-index:21;left:0;right:0;bottom:0;margin:0 auto;max-width:var(--col);max-height:92%;overflow-y:auto;background:var(--surface);border-radius:20px 20px 0 0;
+  padding:8px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));animation:up .22s ease}
+@keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+.grip{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 10px}
+.sheet h3{margin:0 0 4px;font-size:17px;font-weight:900}
+.sheet .lead{margin:0 0 14px;font-size:12px;color:var(--muted)}
+.sheet form{display:grid;gap:14px}
+.field{display:grid;gap:4px;font-size:12px;font-weight:700;color:var(--muted);min-width:0}
+.field input,.field select{font:inherit;font-size:16px;font-weight:400;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;min-height:48px;padding:0 12px;width:100%;min-width:0}
+.amt-in{font-family:var(--font-num)!important;font-size:28px!important;font-weight:500!important;min-height:60px!important}
+.seg-ctl{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg-ctl label{display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;font-size:15px;font-weight:500;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.seg-ctl label:has(input:checked){border-color:var(--back);background:var(--back-soft);color:var(--back);font-weight:700}
+.seg-ctl input{position:absolute;opacity:0;pointer-events:none}
+.who-quick{display:flex;gap:6px;flex-wrap:wrap}
+.who-quick button{font:inherit;font-size:13px;min-height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.chk{display:flex;align-items:center;gap:10px;min-height:44px;font-size:14px;color:var(--ink);cursor:pointer}
+.chk input{accent-color:var(--warn);width:22px;height:22px;margin:0}
+.preview{font-size:12px;color:var(--muted);background:var(--back-soft);border-radius:10px;padding:8px 12px}
+.preview:empty{display:none}
+.preview b{color:var(--ink);font-weight:500}
+.err{font-size:13px;color:var(--bad)}
+.err:empty{display:none}
+.actions{display:grid;grid-template-columns:1fr 2fr;gap:8px}
+
+.toast{position:fixed;z-index:30;left:50%;transform:translateX(-50%);bottom:calc(88px + env(safe-area-inset-bottom,0px));max-width:calc(100% - 32px);background:var(--ink);color:var(--surface);font-size:13px;font-weight:700;border-radius:999px;padding:10px 18px;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+@media (max-width:360px){.free{font-size:34px}.legend .num{font-size:12px}}
+@media (prefers-reduced-motion:reduce){.meter .seg,.sheet{transition:none;animation:none}}
 </style>
 
-<div class="wrap">
-  <header class="top">
-    <h1>2026年11月<small>20日目 / 30日・残り<span class="num">11</span>日</small></h1>
-    <div class="sync">
-      <span class="src">freee カード <b>11/20 08:12</b></span>
-      <span class="src">Amazon スプシ <b>11/19 23:40</b></span>
-      <span class="src">レシート <b>14枚</b></span>
-      <span class="sample">● サンプルデータ</span>
-    </div>
+<div class="app">
+  <header class="bar" id="bar">
+    <h1>11月<small>残り<span class="num">11</span>日</small></h1>
+    <div class="mini">自由に使える <b id="miniFree"></b></div>
   </header>
 
-  <div class="grid">
-    <div class="col">
-      <section class="panel" aria-label="予算">
-        <h2>今月の予算 <span class="num">¥100,000</span></h2>
-        <div class="hero-row">
-          <div>
-            <div class="free-label">欲しいもの込みで自由に使える残り</div>
-            <div class="free num" id="free">¥0</div>
-            <span class="pill ok" id="pacePill">ペース内</span>
-          </div>
-          <div class="perday">1日あたり使える額<span class="num" id="perDay">¥0</span>残り11日で割った額</div>
-        </div>
-        <div class="meter" id="meter">
-          <div class="seg spent" id="segSpent"></div>
-          <div class="seg plan" id="segPlan"></div>
-          <div class="seg over" id="segOver"></div>
-          <div class="pace" id="pace"><span>今日の目安</span></div>
-        </div>
-        <div class="scale num"><span>0</span><span>50,000</span><span>100,000</span></div>
-        <div class="legend">
-          <div class="l-spent"><small>使った（カード）</small><span class="num" id="lgSpent"></span></div>
-          <div class="l-plan"><small>買う予定</small><span class="num" id="lgPlan"></span></div>
-          <div class="l-free"><small>目安との差</small><span class="num" id="lgPace"></span></div>
-        </div>
-      </section>
-
-      <section class="panel" aria-label="欲しいものリスト">
-        <h2>欲しいもの <span>チェック＝今月買う</span></h2>
-        <div class="wishes" id="wishes"></div>
-        <div class="wish-foot"><span>今月の予定 <b class="num" id="wishTotal"></b></span><span id="wishHint"></span></div>
-      </section>
-
-      <section class="panel" aria-label="カテゴリ別">
-        <h2>カテゴリ別 <span>タップで明細を絞り込み</span></h2>
-        <div class="cats" id="cats"></div>
-        <div class="cat-note">緑＝使った額、黄＝欲しいもので使う予定。Amazonとレシートの内訳で分割して集計。</div>
-      </section>
-    </div>
-
-    <div class="col">
-      <section class="panel" aria-label="明細">
-        <h2>カード明細 <span>freee × Amazon × レシート</span></h2>
-        <div class="match">
-          <div><small>レシート突合</small><span class="num" id="mOk"></span></div>
-          <div><small>内訳で分割</small><span class="num" id="mSplit"></span></div>
-          <div class="warn"><small>レシート待ち</small><span class="num" id="mMiss"></span></div>
-        </div>
-        <div class="filters" id="filters"></div>
-        <ul class="tx" id="tx"></ul>
-        <div class="tx-foot"><span id="txCount"></span><span class="num" id="txSum"></span></div>
-      </section>
-    </div>
+  <div class="sync">
+    <span class="src sample">サンプル</span>
+    <span class="src">freee <b>11/20 08:12</b></span>
+    <span class="src">Amazon <b>11/19</b></span>
+    <span class="src">PayPay <b>11/18</b></span>
+    <span class="src">レシート <b>14枚</b></span>
   </div>
+
+  <section class="card" aria-label="予算">
+    <div class="free-label">欲しいもの込みで自由に使える残り（予算 ¥100,000）</div>
+    <div class="free num" id="free">¥0</div>
+    <div class="hero-sub">
+      <span class="pill ok" id="pacePill"></span>
+      <span class="perday">1日 <b id="perDay"></b></span>
+    </div>
+    <div class="meter">
+      <div class="seg spent" id="segSpent"></div>
+      <div class="seg plan" id="segPlan"></div>
+      <div class="seg over" id="segOver"></div>
+      <div class="pace" id="pace"><span>今日の目安</span></div>
+    </div>
+    <div class="scale num"><span>0</span><span>5万</span><span>10万</span></div>
+    <div class="legend">
+      <div class="l-spent"><small>実質使った</small><span class="num" id="lgSpent"></span></div>
+      <div class="l-plan"><small>買う予定</small><span class="num" id="lgPlan"></span></div>
+      <div class="l-free"><small>目安との差</small><span class="num" id="lgPace"></span></div>
+    </div>
+    <div class="netline" id="netline"></div>
+  </section>
+
+  <section class="card" aria-label="割り勘の受け取り">
+    <h2>割り勘の受け取り <span id="bSplit"></span></h2>
+    <div class="back-sum">
+      <div class="in"><small>受け取り済み</small><span class="num" id="bIn"></span></div>
+      <div class="wait"><small>回収待ち</small><span class="num" id="bWait"></span></div>
+    </div>
+    <ul class="backs" id="backs"></ul>
+    <button class="more" type="button" id="moreBacks" hidden></button>
+  </section>
+
+  <section class="card" aria-label="欲しいものリスト">
+    <h2>欲しいもの <span>チェック＝今月買う</span></h2>
+    <div class="wishes" id="wishes"></div>
+    <div class="wish-foot"><span>今月の予定 <b class="num" id="wishTotal"></b></span><span id="wishHint"></span></div>
+  </section>
+
+  <section class="card" aria-label="カテゴリ別">
+    <h2>カテゴリ別 <span>タップで明細を絞る</span></h2>
+    <div class="cats" id="cats"></div>
+  </section>
+
+  <section class="card" aria-label="明細" id="txCard">
+    <h2>カード明細 <span>freee × Amazon × レシート</span></h2>
+    <div class="match">
+      <span>レシート一致 <b id="mOk"></b></span>
+      <span>内訳で補完 <b id="mSplit"></b></span>
+      <span class="warn">レシート待ち <b id="mMiss"></b></span>
+    </div>
+    <div class="chips" id="cardFilters"></div>
+    <div class="chips" id="filters"></div>
+    <ul class="tx" id="tx"></ul>
+    <div class="tx-foot"><span id="txCount"></span><span class="num" id="txSum"></span></div>
+  </section>
 </div>
+
+<button class="fab" type="button" id="openForm"><span>＋</span>割り勘を受け取った</button>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+  <div class="grip"></div>
+  <h3 id="sheetTitle">割り勘の受け取りを登録</h3>
+  <p class="lead">PayPayはスプシから自動で入ります。ここは現金用（PayPayの手入力もできます）</p>
+  <form id="addForm" novalidate>
+    <label class="field">金額
+      <input class="amt-in" type="number" id="fAmt" inputmode="numeric" min="1" step="1" placeholder="¥0">
+    </label>
+    <div class="field">受け取り方
+      <div class="seg-ctl">
+        <label><input type="radio" name="method" id="mCash" value="cash" checked>現金</label>
+        <label><input type="radio" name="method" id="mPay" value="paypay">PayPay</label>
+      </div>
+    </div>
+    <label class="field">だれから
+      <input type="text" id="fWho" placeholder="名前" autocomplete="off">
+    </label>
+    <div class="who-quick" id="whoQuick"></div>
+    <label class="field">払ったカード
+      <select id="fCard"></select>
+    </label>
+    <label class="field">どの支払いの割り勘か
+      <select id="fTx"></select>
+    </label>
+    <div class="two">
+      <label class="field">受け取った日<input type="date" id="fDate" value="2026-11-20"></label>
+      <label class="chk"><input type="checkbox" id="fPending">まだ受け取ってない</label>
+    </div>
+    <div class="preview" id="fPreview"></div>
+    <div class="err" id="fErr" role="alert"></div>
+    <div class="actions">
+      <button class="btn ghost" type="button" id="cancelForm">やめる</button>
+      <button class="btn" type="submit">登録する</button>
+    </div>
+  </form>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
 
 <script>
 const BUDGET = 100000, DAY = 20, DAYS = 30;
 const yen = n => (n < 0 ? "-¥" : "¥") + Math.abs(Math.round(n)).toLocaleString("ja-JP");
+const $ = id => document.getElementById(id);
 
-// source: card=freeeカード明細 / amz=Amazon注文スプシ / rcp=レシート
-// status: ok=レシートと一致 / fill=内訳でカテゴリ補完 / miss=レシート未登録
+const CARDS = {
+  main: {name:"メイン", label:"Visa ••4021"},
+  sub:  {name:"サブ",   label:"JCB ••8830"},
+};
+
+// src: amz=Amazon注文スプシ / rcp=レシート（全件freeeカード明細が土台）
+// st: ok=一致 / fill=内訳でカテゴリ補完 / miss=レシート未登録
 const TX = [
-  {d:"11/19", m:"AMAZON.CO.JP", amt:4280, src:["card","amz"], st:"fill",
+  {id:"t01", d:"11/19", card:"sub",  m:"AMAZON.CO.JP", amt:4280, src:["amz"], st:"fill",
     splits:[["洗濯洗剤 詰替 2個","日用品",1280],["USB-C ケーブル 2m","ガジェット",3000]]},
-  {d:"11/18", m:"成城石井 自由が丘店", amt:3612, src:["card","rcp"], st:"ok", cat:"食費"},
-  {d:"11/17", m:"ブルーボトルコーヒー", amt:680, src:["card","rcp"], st:"ok", cat:"カフェ"},
-  {d:"11/16", m:"UBER EATS", amt:2450, src:["card"], st:"ok", cat:"食費"},
-  {d:"11/15", m:"ハンズ 渋谷店", amt:5940, src:["card","rcp"], st:"fill",
+  {id:"t02", d:"11/18", card:"main", m:"成城石井 自由が丘店", amt:3612, src:["rcp"], st:"ok", cat:"食費"},
+  {id:"t03", d:"11/17", card:"main", m:"ブルーボトルコーヒー", amt:680, src:["rcp"], st:"ok", cat:"カフェ"},
+  {id:"t04", d:"11/16", card:"main", m:"UBER EATS", amt:2450, src:[], st:"ok", cat:"食費"},
+  {id:"t05", d:"11/15", card:"main", m:"ハンズ 渋谷店", amt:5940, src:["rcp"], st:"fill",
     splits:[["保存容器セット","日用品",2200],["マスキングテープ・画材","趣味",3740]]},
-  {d:"11/14", m:"NETFLIX.COM", amt:1590, src:["card"], st:"ok", cat:"サブスク"},
-  {d:"11/12", m:"ユニクロ 銀座店", amt:7990, src:["card","rcp"], st:"ok", cat:"衣服"},
-  {d:"11/10", m:"AMAZON.CO.JP", amt:12800, src:["card","amz"], st:"fill",
+  {id:"t06", d:"11/14", card:"sub",  m:"NETFLIX.COM", amt:1590, src:[], st:"ok", cat:"サブスク"},
+  {id:"t07", d:"11/13", card:"main", m:"焼肉 牛角 恵比寿店", amt:9600, src:["rcp"], st:"ok", cat:"食費", note:"3人"},
+  {id:"t08", d:"11/12", card:"main", m:"ユニクロ 銀座店", amt:7990, src:["rcp"], st:"ok", cat:"衣服"},
+  {id:"t09", d:"11/10", card:"sub",  m:"AMAZON.CO.JP", amt:12800, src:["amz"], st:"fill",
     splits:[["メカニカルキーボード","ガジェット",12800]]},
-  {d:"11/08", m:"ライフ 中目黒店", amt:4318, src:["card","rcp"], st:"ok", cat:"食費"},
-  {d:"11/06", m:"TOHOシネマズ", amt:2200, src:["card"], st:"ok", cat:"趣味"},
-  {d:"11/05", m:"ENEOS", amt:5600, src:["card"], st:"ok", cat:"交通"},
-  {d:"11/03", m:"ドン・キホーテ", amt:3210, src:["card"], st:"miss", cat:"未分類"},
-  {d:"11/02", m:"SPOTIFY", amt:980, src:["card"], st:"ok", cat:"サブスク"},
-  {d:"11/01", m:"AMAZON.CO.JP", amt:6830, src:["card","amz"], st:"fill",
+  {id:"t10", d:"11/08", card:"main", m:"ライフ 中目黒店", amt:4318, src:["rcp"], st:"ok", cat:"食費"},
+  {id:"t11", d:"11/06", card:"main", m:"TOHOシネマズ", amt:2200, src:[], st:"ok", cat:"趣味", note:"2人"},
+  {id:"t12", d:"11/05", card:"main", m:"ENEOS", amt:5600, src:[], st:"ok", cat:"交通"},
+  {id:"t13", d:"11/03", card:"main", m:"ドン・キホーテ", amt:3210, src:[], st:"miss", cat:"未分類"},
+  {id:"t14", d:"11/02", card:"sub",  m:"SPOTIFY", amt:980, src:[], st:"ok", cat:"サブスク"},
+  {id:"t15", d:"11/01", card:"sub",  m:"AMAZON.CO.JP", amt:6830, src:["amz"], st:"fill",
     splits:[["コーヒー豆 500g","カフェ",2830],["技術書 2冊","本",4000]]},
+];
+
+// via: app=アプリから手入力 / sheet=PayPayスプシから取り込み
+let BACKS = [
+  {id:"b1", tx:"t07", who:"田中", amt:3200, method:"paypay", status:"in",   date:"11/14", via:"sheet"},
+  {id:"b2", tx:"t07", who:"佐藤", amt:3200, method:"cash",   status:"wait", date:"",      via:"app"},
+  {id:"b3", tx:"t11", who:"妹",   amt:1100, method:"cash",   status:"in",   date:"11/06", via:"app"},
 ];
 
 let WISH = [
@@ -228,95 +361,193 @@ let WISH = [
   {id:"w4", name:"文庫 3冊", cat:"本", price:2640, prio:"l", on:false, note:"来月でも可"},
 ];
 
-let filter = "すべて";
-const lines = TX.flatMap(t => t.splits ? t.splits.map(s => ({cat:s[1], amt:s[2]})) : [{cat:t.cat, amt:t.amt}]);
-const spent = TX.reduce((a,t)=>a+t.amt,0);
+let filter = "すべて", cardFilter = "all", showAllBacks = false;
 const CAT_ORDER = ["食費","ガジェット","衣服","日用品","交通","カフェ","趣味","本","サブスク","未分類"];
+const txById = id => TX.find(t=>t.id===id);
+const received = t => BACKS.filter(b=>b.tx===t.id && b.status==="in").reduce((a,b)=>a+b.amt,0);
+const pending  = t => BACKS.filter(b=>b.tx===t.id && b.status==="wait").reduce((a,b)=>a+b.amt,0);
+const linesOf = t => (t.splits ? t.splits.map(s=>({cat:s[1], amt:s[2]})) : [{cat:t.cat, amt:t.amt}])
+  .map(l => ({...l, net: l.amt - received(t) * l.amt / t.amt}));  // 受け取り分は内訳に按分
+const short = c => `${CARDS[c].name}${CARDS[c].label.slice(-4)}`;
 
 function render(){
+  const cardTotal = TX.reduce((a,t)=>a+t.amt,0);
+  const backIn = BACKS.filter(b=>b.status==="in").reduce((a,b)=>a+b.amt,0);
+  const backWait = BACKS.filter(b=>b.status==="wait").reduce((a,b)=>a+b.amt,0);
+  const spent = cardTotal - backIn;
   const plan = WISH.filter(w=>w.on).reduce((a,w)=>a+w.price,0);
   const free = BUDGET - spent - plan;
   const ideal = BUDGET * DAY / DAYS;
   const diff = ideal - spent;
   const daysLeft = DAYS - DAY + 1;
 
-  // hero
-  const f = document.getElementById("free");
-  f.textContent = yen(free); f.classList.toggle("neg", free < 0);
-  document.getElementById("perDay").textContent = yen(Math.max(free,0)/daysLeft);
-  const pill = document.getElementById("pacePill");
+  // 残り額
+  $("free").textContent = yen(free); $("free").classList.toggle("neg", free < 0);
+  $("miniFree").textContent = yen(free);
+  $("perDay").textContent = yen(Math.max(free,0)/daysLeft);
+  const pill = $("pacePill");
   if (free < 0){ pill.className="pill bad"; pill.textContent = "予定込みで "+yen(-free)+" オーバー"; }
-  else if (diff < 0){ pill.className="pill bad"; pill.textContent = "目安より "+yen(-diff)+" 使いすぎ"; }
+  else if (diff < 0){ pill.className="pill bad"; pill.textContent = "目安より "+yen(-diff)+" 使いすぎ" + (backWait >= -diff ? "・回収で戻る" : ""); }
   else { pill.className="pill ok"; pill.textContent = "ペース内・目安より "+yen(diff)+" 少ない"; }
 
-  // meter
   const pct = v => Math.min(v,BUDGET)/BUDGET*100;
   const sp = pct(spent), pl = Math.max(0, pct(spent+plan) - sp);
-  const S = id => document.getElementById(id).style;
-  S("segSpent").width = sp+"%";
-  S("segPlan").left = sp+"%"; S("segPlan").width = pl+"%";
   const over = Math.max(0, spent+plan-BUDGET);
-  S("segOver").left = (100 - over/BUDGET*100)+"%"; S("segOver").width = (over/BUDGET*100)+"%";
-  S("pace").left = (ideal/BUDGET*100)+"%";
-  document.getElementById("lgSpent").textContent = yen(spent);
-  document.getElementById("lgPlan").textContent = yen(plan);
-  document.getElementById("lgPace").textContent = (diff>=0?"+":"") + yen(diff).replace("-","−");
+  Object.assign($("segSpent").style, {width: sp+"%"});
+  Object.assign($("segPlan").style, {left: sp+"%", width: pl+"%"});
+  Object.assign($("segOver").style, {left: (100-over/BUDGET*100)+"%", width: (over/BUDGET*100)+"%"});
+  $("pace").style.left = (ideal/BUDGET*100)+"%";
+  $("lgSpent").textContent = yen(spent);
+  $("lgPlan").textContent = yen(plan);
+  $("lgPace").textContent = (diff>=0?"+":"−") + yen(Math.abs(diff));
+  $("netline").innerHTML = `カード <span class="num">${yen(cardTotal)}</span> − 割り勘 <b class="num">${yen(backIn)}</b>`
+    + (backWait ? `・回収待ち <i class="num">${yen(backWait)}</i>` : "");
 
-  // wishes
-  document.getElementById("wishes").innerHTML = WISH.map(w => `
+  // 割り勘
+  const cashIn = BACKS.filter(b=>b.status==="in"&&b.method==="cash").reduce((a,b)=>a+b.amt,0);
+  $("bIn").textContent = yen(backIn);
+  $("bWait").textContent = yen(backWait);
+  $("bSplit").textContent = `現金 ${yen(cashIn)}・PayPay ${yen(backIn-cashIn)}`;
+  const order = [...BACKS].sort((a,b)=>(a.status==="wait"?0:1)-(b.status==="wait"?0:1));
+  const shown = showAllBacks ? order : order.slice(0,3);
+  $("backs").innerHTML = shown.length ? shown.map(b=>{
+    const t = txById(b.tx);
+    const mtag = b.method==="cash" ? `<span class="tag">現金</span>` : `<span class="tag">PayPay${b.via==="sheet"?"・スプシ":""}</span>`;
+    return `<li class="${b.status==="wait"?"pending":""}">
+      <span class="who">${b.who} ${mtag}</span>
+      <span class="link">${short(t.card)}・${t.d} ${t.m}</span>
+      <span class="right"><span class="num">${b.status==="wait"?"待ち ":"+"}${yen(b.amt)}</span>
+      ${b.status==="wait"?`<button class="btn sm" type="button" data-receive="${b.id}">受け取った</button>`:`<span class="tag">${b.date}</span>`}</span>
+    </li>`}).join("") : `<li class="empty">まだ割り勘の記録はありません</li>`;
+  $("moreBacks").hidden = order.length <= 3;
+  $("moreBacks").textContent = showAllBacks ? "閉じる" : `すべて見る（${order.length}件）`;
+
+  // 欲しいもの
+  $("wishes").innerHTML = WISH.map(w => `
     <label class="wish ${w.on?"on":""}">
-      <input type="checkbox" id="${w.id}" ${w.on?"checked":""} data-id="${w.id}">
+      <input type="checkbox" id="${w.id}" ${w.on?"checked":""} data-wish="${w.id}">
       <div><div class="name">${w.name}<span class="prio ${w.prio}">${{h:"高",m:"中",l:"低"}[w.prio]}</span></div>
       <div class="meta">${w.cat}${w.note?"・"+w.note:""}</div></div>
       <span class="num">${yen(w.price)}</span>
     </label>`).join("");
-  document.getElementById("wishTotal").textContent = yen(plan);
+  $("wishTotal").textContent = yen(plan);
   const nextOff = WISH.filter(w=>!w.on).sort((a,b)=>a.price-b.price)[0];
-  document.getElementById("wishHint").textContent = nextOff
+  $("wishHint").textContent = nextOff
     ? (free - nextOff.price >= 0 ? `「${nextOff.name}」も買うと残り ${yen(free-nextOff.price)}` : `「${nextOff.name}」を足すと ${yen(nextOff.price-free)} オーバー`)
     : "";
 
-  // categories
+  // カテゴリ（実質）
   const byCat = {}; CAT_ORDER.forEach(c=>byCat[c]={s:0,p:0});
-  lines.forEach(l=>byCat[l.cat].s+=l.amt);
+  TX.flatMap(linesOf).forEach(l=>byCat[l.cat].s+=l.net);
   WISH.filter(w=>w.on).forEach(w=>byCat[w.cat].p+=w.price);
   const max = Math.max(...CAT_ORDER.map(c=>byCat[c].s+byCat[c].p));
-  document.getElementById("cats").innerHTML = CAT_ORDER.filter(c=>byCat[c].s+byCat[c].p>0)
+  $("cats").innerHTML = CAT_ORDER.filter(c=>byCat[c].s+byCat[c].p>0)
     .sort((a,b)=>(byCat[b].s+byCat[b].p)-(byCat[a].s+byCat[a].p))
-    .map(c=>{const v=byCat[c]; return `<button class="cat ${filter===c?"active":""}" data-cat="${c}">
-      <span>${c}</span><span class="bar"><i style="width:${v.s/max*100}%"></i><i class="p" style="width:${v.p/max*100}%"></i></span>
-      <span class="num">${yen(v.s)}${v.p?`<br><small style="color:var(--plan)">+${yen(v.p)}</small>`:""}</span></button>`}).join("");
+    .map(c=>{const v=byCat[c]; return `<button class="cat ${filter===c?"active":""}" data-cat="${c}" data-jump="1">
+      <span>${c}</span><span class="bar2"><i style="width:${v.s/max*100}%"></i><i class="p" style="width:${v.p/max*100}%"></i></span>
+      <span class="num">${yen(v.s)}${v.p?`<br><small>+${yen(v.p)}</small>`:""}</span></button>`}).join("");
 
-  // match summary
-  document.getElementById("mOk").textContent = TX.filter(t=>t.st==="ok"&&t.src.includes("rcp")).length+"件";
-  document.getElementById("mSplit").textContent = TX.filter(t=>t.st==="fill").length+"件";
-  document.getElementById("mMiss").textContent = TX.filter(t=>t.st==="miss").length+"件";
+  // 明細
+  $("mOk").textContent = TX.filter(t=>t.st==="ok"&&t.src.includes("rcp")).length;
+  $("mSplit").textContent = TX.filter(t=>t.st==="fill").length;
+  $("mMiss").textContent = TX.filter(t=>t.st==="miss").length;
+  $("cardFilters").innerHTML = [["all","全カード"], ...Object.keys(CARDS).map(k=>[k, short(k)])]
+    .map(([k,l])=>`<button class="chip" aria-pressed="${cardFilter===k}" data-card="${k}">${l}</button>`).join("");
+  $("filters").innerHTML = ["すべて", ...CAT_ORDER.filter(c=>byCat[c].s>0)]
+    .map(c=>`<button class="chip" aria-pressed="${filter===c}" data-cat="${c}">${c}</button>`).join("");
 
-  // filters + tx
-  const cats = ["すべて", ...CAT_ORDER.filter(c=>byCat[c].s>0)];
-  document.getElementById("filters").innerHTML = cats.map(c=>`<button class="chip-btn" aria-pressed="${filter===c}" data-cat="${c}">${c}</button>`).join("");
-  const rows = TX.filter(t => filter==="すべて" || (t.splits ? t.splits.some(s=>s[1]===filter) : t.cat===filter));
+  const rows = TX.filter(t => (cardFilter==="all" || t.card===cardFilter)
+    && (filter==="すべて" || (t.splits ? t.splits.some(s=>s[1]===filter) : t.cat===filter)));
   const stLabel = {ok:["ok","一致"], fill:["fill","内訳で補完"], miss:["miss","レシート待ち"]};
-  const srcLabel = {card:["","freee"], amz:["amz","Amazon"], rcp:["rcp","レシート"]};
-  document.getElementById("tx").innerHTML = rows.length ? rows.map(t=>{
-    const st = stLabel[t.st];
-    const tags = t.src.map(s=>`<span class="tag ${srcLabel[s][0]}">${srcLabel[s][1]}</span>`).join("")
-      + (t.cat?`<span class="tag">${t.cat}</span>`:"") + `<span class="st ${st[0]}">${st[1]}</span>`;
+  const srcLabel = {amz:["amz","Amazon"], rcp:["rcp","レシート"]};
+  $("tx").innerHTML = rows.length ? rows.map(t=>{
+    const st = stLabel[t.st], r = received(t);
+    const tags = `<span class="tag card">${short(t.card)}</span>`
+      + t.src.map(s=>`<span class="tag ${srcLabel[s][0]}">${srcLabel[s][1]}</span>`).join("")
+      + (t.cat?`<span class="tag">${t.cat}</span>`:"") + (t.note?`<span class="tag">${t.note}</span>`:"")
+      + `<span class="st ${st[0]}">${st[1]}</span>`;
     const splits = t.splits ? `<div class="splits">${t.splits.map(s=>`<div><span>${s[0]}・<em>${s[1]}</em></span><span class="num">${yen(s[2])}</span></div>`).join("")}</div>` : "";
-    return `<li><span class="d num">${t.d}</span><div><div class="m">${t.m}</div><div class="tags">${tags}</div></div><span class="amt num">${yen(t.amt)}</span>${splits}</li>`;
-  }).join("") : `<li class="empty">この分類の明細はまだありません</li>`;
-  const sum = filter==="すべて" ? spent : lines.filter(l=>l.cat===filter).reduce((a,l)=>a+l.amt,0);
-  document.getElementById("txCount").textContent = `${rows.length}件${filter!=="すべて"?"（"+filter+"分のみ集計）":""}`;
-  document.getElementById("txSum").textContent = yen(sum);
+    const bk = BACKS.filter(b=>b.tx===t.id);
+    const backs = bk.length ? `<div class="splits back">${bk.map(b=>`<div><span>割り勘・${b.who}（${b.method==="cash"?"現金":"PayPay"}）</span><span class="num ${b.status==="in"?"in":"wait"}">${b.status==="in"?"−"+yen(b.amt):"待ち "+yen(b.amt)}</span></div>`).join("")}</div>` : "";
+    const amt = r ? `<s>${yen(t.amt)}</s>${yen(t.amt-r)}` : yen(t.amt);
+    return `<li><span class="d num">${t.d}</span><div><div class="m">${t.m}</div><div class="tags">${tags}</div></div><span class="amt num">${amt}</span>${splits}${backs}</li>`;
+  }).join("") : `<li class="empty">この条件の明細はまだありません</li>`;
+  const sum = rows.flatMap(linesOf).filter(l=>filter==="すべて"||l.cat===filter).reduce((a,l)=>a+l.net,0);
+  $("txCount").textContent = `${rows.length}件・実質負担${filter!=="すべて"?"（"+filter+"分）":""}`;
+  $("txSum").textContent = yen(sum);
 }
 
+// トースト
+let toastTimer;
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.hidden=true, 3200); }
+
+// ボトムシート
+function fillTxSelect(){
+  const card = $("fCard").value;
+  $("fTx").innerHTML = TX.filter(t=>t.card===card).map(t=>{
+    const left = t.amt - received(t) - pending(t);
+    return `<option value="${t.id}">${t.d} ${t.m} ${yen(t.amt)}${left<t.amt?`（残り${yen(left)}）`:""}</option>`}).join("");
+  updatePreview();
+}
+function updatePreview(){
+  const t = txById($("fTx").value), a = Math.round(+$("fAmt").value || 0);
+  $("fErr").textContent = "";
+  $("fDate").disabled = $("fPending").checked;
+  if (!t || !a){ $("fPreview").textContent = ""; return; }
+  $("fPreview").innerHTML = $("fPending").checked
+    ? `回収待ちに <b class="num">${yen(a)}</b> を追加。受け取るまで実質負担は変わりません`
+    : `${t.m} の実質負担 <b class="num">${yen(t.amt-received(t))}</b> → <b class="num">${yen(t.amt-received(t)-a)}</b>`;
+}
+function openSheet(show){
+  $("sheet").hidden = $("scrim").hidden = !show;
+  $("openForm").hidden = show;
+  document.body.style.overflow = show ? "hidden" : "";
+  if (show){
+    $("fCard").innerHTML = Object.entries(CARDS).map(([k,c])=>`<option value="${k}">${c.name} ${c.label}</option>`).join("");
+    const names = [...new Set(BACKS.map(b=>b.who))];
+    $("whoQuick").innerHTML = names.map(n=>`<button type="button" data-who="${n}">${n}</button>`).join("");
+    fillTxSelect(); $("fAmt").focus();
+  }
+}
+$("openForm").addEventListener("click", ()=>openSheet(true));
+$("cancelForm").addEventListener("click", ()=>openSheet(false));
+$("scrim").addEventListener("click", ()=>openSheet(false));
+$("fCard").addEventListener("change", fillTxSelect);
+["fTx","fAmt","fPending"].forEach(id=>$(id).addEventListener("input", updatePreview));
+$("whoQuick").addEventListener("click", e=>{ const b=e.target.closest("[data-who]"); if(b){ $("fWho").value=b.dataset.who; } });
+$("addForm").addEventListener("submit", e=>{
+  e.preventDefault();
+  const who = $("fWho").value.trim(), amt = Math.round(+$("fAmt").value || 0), t = txById($("fTx").value);
+  const left = t.amt - received(t) - pending(t);
+  if (amt <= 0) return $("fErr").textContent = "金額を1円以上で入れてください";
+  if (!who) return $("fErr").textContent = "だれから受け取ったかを入れてください";
+  if (amt > left) return $("fErr").textContent = `この支払いで割り勘にできるのは残り ${yen(left)} までです`;
+  const [ , mm, dd] = $("fDate").value.split("-");
+  const pend = $("fPending").checked;
+  BACKS.push({id:"b"+Date.now(), tx:t.id, who, amt,
+    method: document.querySelector('input[name="method"]:checked').value,
+    status: pend ? "wait" : "in", date: pend ? "" : `${+mm}/${+dd}`, via:"app"});
+  $("addForm").reset(); $("fDate").value = "2026-11-20";
+  openSheet(false); render();
+  toast(`${who}さんの ${yen(amt)} を${pend?"回収待ちで":""}登録しました`);
+});
+
 document.addEventListener("change", e => {
-  const id = e.target.dataset && e.target.dataset.id;
-  if (id){ WISH = WISH.map(w => w.id===id ? {...w, on:e.target.checked} : w); render(); document.getElementById(id)?.focus(); }
+  const id = e.target.dataset && e.target.dataset.wish;
+  if (id){ WISH = WISH.map(w => w.id===id ? {...w, on:e.target.checked} : w); render(); $(id)?.focus(); }
 });
 document.addEventListener("click", e => {
-  const b = e.target.closest("[data-cat]");
-  if (b){ const c = b.dataset.cat; filter = (filter===c && c!=="すべて") ? "すべて" : c; render(); }
+  const c = e.target.closest("[data-cat]");
+  if (c){ const v = c.dataset.cat; filter = (filter===v && v!=="すべて") ? "すべて" : v; render();
+    if (c.dataset.jump) $("txCard").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion:reduce)").matches ? "auto" : "smooth"});
+    return; }
+  const k = e.target.closest("[data-card]");
+  if (k){ cardFilter = k.dataset.card; render(); return; }
+  const r = e.target.closest("[data-receive]");
+  if (r){ const b = BACKS.find(x=>x.id===r.dataset.receive); b.status="in"; b.date="11/20"; render(); toast(`${b.who}さんの ${yen(b.amt)} を受け取り済みにしました`); return; }
+  if (e.target.id==="moreBacks"){ showAllBacks = !showAllBacks; render(); }
 });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !$("sheet").hidden) openSheet(false); });
+addEventListener("scroll", ()=>$("bar").classList.toggle("stuck", scrollY > 140), {passive:true});
 render();
 </script>
