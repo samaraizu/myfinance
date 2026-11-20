@@ -9,6 +9,7 @@ const CONFIG = {
   TOTAL_TOLERANCE: 1, // 明細合計とレシート合計の許容誤差（円）
   TRIGGER_MINUTES: 10,
   SUPPORTED_MIME: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'],
+  SPREADSHEET_ID: '1iXfZPggxoxpQIiP6MJUKbHF62628p-poP-nuuYCGbiA', // 記録先（Finance-1.0）
 };
 
 const FOLDER = {
@@ -20,19 +21,22 @@ const FOLDER = {
 const PROP = {
   API_KEY: 'GEMINI_API_KEY',
   MODEL: 'GEMINI_MODEL',
-  SPREADSHEET_ID: 'SPREADSHEET_ID',
+  SPREADSHEET_ID: 'SPREADSHEET_ID', // 旧「レシート記録」。移行元としてだけ使う
+  MIGRATED_TO: 'POS_MIGRATED_TO',
   INBOX_ID: 'INBOX_FOLDER_ID',
   DONE_ID: 'DONE_FOLDER_ID',
   ERROR_ID: 'ERROR_FOLDER_ID',
 };
 
-const SHEET = {
+// 統合先の既存シートと区別するため【POS】を付ける
+const LEGACY_SHEET = {
   ITEMS: '明細',
   RECEIPTS: 'レシート',
   CATEGORIES: 'カテゴリマスタ',
   DASHBOARD: 'ダッシュボード',
   LOG: 'ログ',
 };
+const SHEET = Object.fromEntries(Object.entries(LEGACY_SHEET).map(([k, v]) => [k, `【POS】${v}`]));
 
 const HEADERS = {
   ITEMS: ['日付', '店舗', '品名', '正規化品名', 'カテゴリ', '数量', '単価', '金額', '値引き', 'レシートID', '画像リンク'],

@@ -3,7 +3,7 @@
  * 数式で集計するので、データ追加時の再構築は不要。
  */
 function buildDashboard_(ss) {
-  const sh = ss.getSheetByName(SHEET.DASHBOARD) || ss.insertSheet(SHEET.DASHBOARD);
+  const sh = ss.getSheetByName(SHEET.DASHBOARD) || ss.insertSheet(SHEET.DASHBOARD, ss.getNumSheets());
   sh.getCharts().forEach((c) => sh.removeChart(c));
   sh.clear();
   sh.clearConditionalFormatRules();

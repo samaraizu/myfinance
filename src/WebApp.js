@@ -11,8 +11,15 @@ function doGet() {
 
 /** 当月合計など、画面初期表示用のサマリー。 */
 function getSummary() {
-  const ss = openSpreadsheet_();
-  return { monthTotal: getMonthTotal_(ss), spreadsheetUrl: ss.getUrl() };
+  // 初回は【POS】シート作成・移行が走るので、自動処理と同時に走らないようロックを取る
+  const lock = LockService.getScriptLock();
+  const locked = lock.tryLock(60 * 1000);
+  try {
+    const ss = openSpreadsheet_();
+    return { monthTotal: getMonthTotal_(ss), spreadsheetUrl: ss.getUrl() };
+  } finally {
+    if (locked) lock.releaseLock();
+  }
 }
 
 /**

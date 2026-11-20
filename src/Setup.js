@@ -9,9 +9,8 @@ function setup() {
   setProp_(PROP.DONE_ID, ensureFolder_(PROP.DONE_ID, FOLDER.DONE).getId());
   setProp_(PROP.ERROR_ID, ensureFolder_(PROP.ERROR_ID, FOLDER.ERROR).getId());
 
-  const ss = ensureSpreadsheet_();
+  const ss = openSpreadsheet_(); // 【POS】シートがなければ作成・旧シートから移行
   setupSheets_(ss);
-  buildDashboard_(ss);
   installTrigger_();
 
   console.log(`スプレッドシート: ${ss.getUrl()}`);
@@ -43,24 +42,9 @@ function ensureFolder_(propKey, name) {
   return found.hasNext() ? found.next() : DriveApp.createFolder(name);
 }
 
-function ensureSpreadsheet_() {
-  const id = getProp_(PROP.SPREADSHEET_ID);
-  if (id) {
-    try {
-      return SpreadsheetApp.openById(id);
-    } catch (e) {
-      // 削除済みなら作り直す
-    }
-  }
-  const ss = SpreadsheetApp.create('レシート記録');
-  ss.setSpreadsheetTimeZone('Asia/Tokyo');
-  setProp_(PROP.SPREADSHEET_ID, ss.getId());
-  return ss;
-}
-
 function ensureSheet_(ss, name, headers) {
   let sheet = ss.getSheetByName(name);
-  if (!sheet) sheet = ss.insertSheet(name);
+  if (!sheet) sheet = ss.insertSheet(name, ss.getNumSheets()); // 既存シートの後ろに追加
   if (headers && sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers])
       .setFontWeight('bold').setBackground('#eeeeee');
@@ -70,7 +54,7 @@ function ensureSheet_(ss, name, headers) {
 }
 
 function setupSheets_(ss) {
-  const dashboard = ensureSheet_(ss, SHEET.DASHBOARD);
+  ensureSheet_(ss, SHEET.DASHBOARD);
   const items = ensureSheet_(ss, SHEET.ITEMS, HEADERS.ITEMS);
   const receipts = ensureSheet_(ss, SHEET.RECEIPTS, HEADERS.RECEIPTS);
   const categories = ensureSheet_(ss, SHEET.CATEGORIES, HEADERS.CATEGORIES);
@@ -94,12 +78,44 @@ function setupSheets_(ss) {
     .whenTextEqualTo('要確認').setBackground('#f4cccc').setFontColor('#990000')
     .setRanges([flagRange]).build());
   receipts.setConditionalFormatRules(rules);
+}
 
-  // 初期作成時の「シート1」を消してダッシュボードを先頭に
-  const blank = ss.getSheetByName('シート1') || ss.getSheetByName('Sheet1');
-  if (blank && ss.getSheets().length > 1) ss.deleteSheet(blank);
-  ss.setActiveSheet(dashboard);
-  ss.moveActiveSheet(1);
+/**
+ * 旧「レシート記録」スプレッドシートのデータを【POS】シートへ1回だけコピーする。
+ * 二重コピーを防ぐため先に完了フラグを立てる（失敗しても旧シートはそのまま残る）。
+ */
+function migrateLegacy_(ss) {
+  const legacyId = getProp_(PROP.SPREADSHEET_ID);
+  if (!legacyId || legacyId === ss.getId() || getProp_(PROP.MIGRATED_TO) === ss.getId()) return;
+  setProp_(PROP.MIGRATED_TO, ss.getId());
+
+  const legacy = SpreadsheetApp.openById(legacyId);
+  ['ITEMS', 'RECEIPTS', 'LOG'].forEach((key) => {
+    const rows = readLegacyRows_(legacy, LEGACY_SHEET[key], HEADERS[key].length);
+    if (!rows.length) return;
+    const sheet = getSheet_(ss, SHEET[key]);
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+  });
+  const categories = readLegacyRows_(legacy, LEGACY_SHEET.CATEGORIES, HEADERS.CATEGORIES.length);
+  if (categories.length) {
+    const sheet = getSheet_(ss, SHEET.CATEGORIES);
+    if (sheet.getLastRow() > 1) sheet.getRange(2, 1, sheet.getLastRow() - 1, HEADERS.CATEGORIES.length).clearContent();
+    sheet.getRange(2, 1, categories.length, categories[0].length).setValues(categories);
+  }
+  console.log(`旧シート ${legacy.getUrl()} から【POS】シートへ移行しました`);
+}
+
+function readLegacyRows_(legacy, name, width) {
+  const sheet = legacy.getSheetByName(name);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const tz = legacy.getSpreadsheetTimeZone();
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1, width).getValues()
+    .filter((row) => row.some((v) => v !== ''))
+    .map((row) => row.map((v) => {
+      if (!(v instanceof Date)) return v;
+      const time = Utilities.formatDate(v, tz, 'HH:mm:ss');
+      return Utilities.formatDate(v, tz, time === '00:00:00' ? 'yyyy/MM/dd' : 'yyyy/MM/dd HH:mm:ss');
+    }));
 }
 
 function installTrigger_() {

@@ -1,8 +1,15 @@
 /**
  * スプレッドシートの読み書き。
  */
+/** 記録先を開く。【POS】シートがまだなければ作成し、旧シートからデータを移す（呼び出し側でロックを取る）。 */
 function openSpreadsheet_() {
-  return SpreadsheetApp.openById(getProp_(PROP.SPREADSHEET_ID, true));
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  if (!ss.getSheetByName(SHEET.DASHBOARD)) {
+    setupSheets_(ss);
+    migrateLegacy_(ss);
+    buildDashboard_(ss);
+  }
+  return ss;
 }
 
 function getSheet_(ss, name) {
@@ -28,9 +35,16 @@ function isProcessed_(ss, fileId) {
   return sheet.getRange(2, 1, last - 1, 1).createTextFinder(fileId).matchEntireCell(true).findNext() !== null;
 }
 
+/**
+ * 日付はDateではなく文字列で書く。記録先のタイムゾーンが日本時間でなくても日付がずれないように、
+ * 入力したのと同じ扱いでシート側に解釈させる。
+ */
 function toSheetDate_(isoDate) {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  return new Date(y, m - 1, d);
+  return isoDate.replace(/-/g, '/');
+}
+
+function toSheetDateTime_(date) {
+  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy/MM/dd HH:mm:ss');
 }
 
 function saveReceipt_(ss, fileId, fileUrl, receipt) {
@@ -46,7 +60,7 @@ function saveReceipt_(ss, fileId, fileUrl, receipt) {
   const receipts = getSheet_(ss, SHEET.RECEIPTS);
   receipts.appendRow([
     fileId, date, receipt.store, receipt.total, receipt.tax === null ? '' : receipt.tax,
-    receipt.itemsSum, receipt.diff, receipt.ok ? 'OK' : '要確認', new Date(), fileUrl,
+    receipt.itemsSum, receipt.diff, receipt.ok ? 'OK' : '要確認', toSheetDateTime_(new Date()), fileUrl,
   ]);
 }
 
@@ -67,7 +81,7 @@ function log_(level, file, message) {
   try {
     const ss = openSpreadsheet_();
     getSheet_(ss, SHEET.LOG).appendRow([
-      new Date(), level, file ? file.getName() : '', file ? file.getId() : '', String(message).slice(0, 1000),
+      toSheetDateTime_(new Date()), level, file ? file.getName() : '', file ? file.getId() : '', String(message).slice(0, 1000),
     ]);
   } catch (e) {
     console.error(`ログ書き込み失敗: ${e}`);
