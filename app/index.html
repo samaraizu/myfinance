@@ -476,7 +476,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     </div>
     <div class="sumline"><span id="rSumLabel">Items add up to</span><b id="rItemsSum"></b></div>
     <div class="err" id="rErr" role="alert"></div>
-    <p class="lead" style="margin:0" id="rNote">Check the details, then save. Reading the photo automatically comes later.</p>
+    <p class="lead" style="margin:0" id="rNote">Check the details, then save.</p>
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Cancel</button>
       <button class="btn" type="button" id="rcptSave">Save receipt</button>
@@ -492,6 +492,10 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <label class="field">Monthly budget (¥)<input class="amt-in" type="number" id="sBudget" inputmode="numeric" min="1000" step="1000"></label>
     <div class="err" id="sErr" role="alert"></div>
     <button class="btn" type="submit">Save budget</button>
+  </form>
+  <form id="keyForm" novalidate style="display:grid;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
+    <label class="field">Receipt reading key<input type="password" id="sAppKey" autocomplete="off" placeholder="Only if you set APP_KEY in Vercel"></label>
+    <button class="btn ghost" type="submit">Save key on this phone</button>
   </form>
   <div style="display:grid;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
     <p class="lead" id="sDataNote" style="margin:0"></p>
@@ -1026,22 +1030,59 @@ function openRcpt(){
 }
 const mdOf = iso => { const [,m,d] = iso.split("-"); return `${+m}/${+d}`; };
 const mdNum = md => { const [m,d] = md.split("/"); return +m*31 + +d; };
-function readRcpt(url, sample){
+// 写真を長辺1600pxのJPEGに縮めてから送る（通信量とAPIの上限対策）
+function shrinkPhoto(file){
+  return new Promise((ok, ng)=>{
+    const img = new Image(), u = URL.createObjectURL(file);
+    img.onload = ()=>{
+      const k = Math.min(1, 1600/Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width*k); c.height = Math.round(img.height*k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
+      ok(c.toDataURL("image/jpeg", 0.85).split(",")[1]);
+    };
+    img.onerror = ()=>ng(new Error("This file is not a photo we can open"));
+    img.src = u;
+  });
+}
+async function readWithClaude(file){
+  const image = await shrinkPhoto(file);
+  const r = await fetch("/api/receipt", {method:"POST", headers:{"Content-Type":"application/json", "X-App-Key": appKey()}, body: JSON.stringify({image, mediaType:"image/jpeg"})});
+  const d = await r.json().catch(()=>({error:"Reading failed. Try again."}));
+  if (!r.ok) throw new Error(d.error || "Reading failed. Try again.");
+  return d;
+}
+function payFrom(d){
+  if (d.payment === "cash") return "cash";
+  const hit = Object.entries(CARDS).find(([k,c])=>k!=="cash" && d.card_last4 && c.label.endsWith(d.card_last4));
+  return hit ? hit[0] : (d.payment === "card" ? "main" : "cash");
+}
+async function readRcpt(url, sample, file){
   rcptStep("reading");
-  $("rcptReadingText").textContent = sample ? "Reading sample receipt…" : "Opening photo…";
-  setTimeout(()=>{
-    rcpt = sample
-      ? {store:RCPT_SAMPLE.store, date:`${TODAY.getFullYear()}-11-03`, total:RCPT_SAMPLE.total, pay:"main", items:RCPT_SAMPLE.items.map(i=>[...i])}
-      : {store:"", date:TODAY_ISO, total:0, pay:"cash", items:[["","Food",0]]};
+  $("rcptReadingText").textContent = sample ? "Reading sample receipt…" : "Reading the receipt with Claude…";
+  let readErr = "";
+  if (sample) {
+    await new Promise(r=>setTimeout(r, 900));
+    rcpt = {store:RCPT_SAMPLE.store, date:`${TODAY.getFullYear()}-11-03`, total:RCPT_SAMPLE.total, pay:"main", items:RCPT_SAMPLE.items.map(i=>[...i])};
+  } else {
+    rcpt = {store:"", date:TODAY_ISO, total:0, pay:"cash", items:[["","Food",0]]};
+    try {
+      const d = await readWithClaude(file);
+      rcpt = {store:d.store || "", date:/^\d{4}-\d{2}-\d{2}$/.test(d.date||"") ? d.date : TODAY_ISO, total:d.total || 0, pay:payFrom(d),
+              items:(d.items && d.items.length ? d.items.map(i=>[i.name, i.category, i.amount]) : [["", "Food", d.total || 0]])};
+      if (!d.total) readErr = "Claude could not find a total on this photo. Enter the details by hand.";
+    } catch(e){ readErr = `${e.message} You can enter the details by hand.`; }
+  }
+  {
     $("rcptShot").style.backgroundImage = url ? `url(${url})` : "";
     $("rcptShot").textContent = url ? "" : "SAMPLE";
     $("rStore").value = rcpt.store; $("rTotal").value = rcpt.total || ""; $("rDate").value = rcpt.date;
     $("rPay").innerHTML = Object.entries(CARDS).map(([k,c])=>`<option value="${k}" ${k===rcpt.pay?"selected":""}>${k==="cash"?"Cash":c.name+" "+c.label}</option>`).join("");
-    $("rErr").textContent = "";
+    $("rErr").textContent = readErr;
+    $("rNote").textContent = sample ? "Sample receipt. Check the details, then save." : readErr ? "Reading did not work this time." : "Read by Claude. Check the amounts before saving.";
     renderRcptItems(); updateRcpt();
     rcptStep("review");
-    if (!sample) $("rStore").focus();
-  }, sample ? 900 : 300);
+    if (!sample && readErr) $("rStore").focus();
+  }
 }
 function renderRcptItems(){
   $("rcptRows").innerHTML = rcpt.items.map((it,i)=>`<li>
@@ -1085,7 +1126,7 @@ $("rAddItem").addEventListener("click", ()=>{
   renderRcptItems(); updateRcpt(); document.querySelector(`[data-rname="${rcpt.items.length-1}"]`)?.focus();
 });
 ["rcptCam","rcptLib"].forEach(id=>$(id).addEventListener("change", e=>{
-  const f = e.target.files[0]; if (f) readRcpt(URL.createObjectURL(f), false);
+  const f = e.target.files[0]; if (f) readRcpt(URL.createObjectURL(f), false, f);
 }));
 $("rcptSample").addEventListener("click", ()=>readRcpt("", true));
 $("rcptSave").addEventListener("click", ()=>{
@@ -1261,6 +1302,12 @@ function openSettings(){
   $("sDataNote").textContent = SAMPLE ? "You are looking at sample data. Clear it to start tracking your own month." : `Your data: ${TX.length} charges, ${BACKS.length} paybacks, ${WISH.length} wishlist items.`;
 }
 $("openSettings").addEventListener("click", openSettings);
+const appKey = () => { try { return localStorage.getItem("mf-app-key") || ""; } catch(e){ return ""; } };
+$("keyForm").addEventListener("submit", e=>{
+  e.preventDefault();
+  try { localStorage.setItem("mf-app-key", $("sAppKey").value.trim()); } catch(err){}
+  $("sAppKey").value = ""; toast("Reading key saved on this phone");
+});
 $("setForm").addEventListener("submit", e=>{
   e.preventDefault();
   const v = Math.round(+$("sBudget").value || 0);

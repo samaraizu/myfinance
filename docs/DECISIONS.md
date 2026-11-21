@@ -7,3 +7,4 @@
 - Amazon and PayPay come in from screenshots only. No spreadsheets for them.
 - Card statements (freee, Amex) are connected after release.
 - Style: Night (navy cards, cyan for actions, lime for money, rounded). See design-system/.
+- Receipt photos are read by Claude (claude-opus-5-5) through `app/api/receipt.js` on Vercel. The Claude API key lives only in Vercel's environment variable `ANTHROPIC_API_KEY`. Optional `APP_KEY` limits who can use the reader; the phone stores the matching key under ••• settings.
