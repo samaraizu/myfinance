@@ -42,6 +42,10 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .mini{font-size:12px;color:var(--muted);text-align:right;opacity:0;transition:opacity .2s}
 .bar.stuck .mini{opacity:1}
 .mini b{font-family:var(--font-num);font-size:15px;color:var(--ink);font-weight:600}
+.add-inline{display:grid;gap:12px;margin-top:10px;padding:12px;border:1px solid var(--line)}
+.wish .del{font:inherit;font-size:18px;line-height:1;color:var(--muted);background:none;border:0;width:32px;height:32px;cursor:pointer;margin-right:-6px}
+.night-hero nav button.dots{color:var(--ink);letter-spacing:2px;font-weight:800;border-bottom-color:transparent}
+.empty-note{font-size:13px;color:var(--muted);padding:8px 0}
 /* Night skin：濃紺のカード＋シアン＋ライムの金額、角丸、ヒーロー帯 */
 .night-hero{display:none}
 .skin-night{--money:#d4f04a; color-scheme:dark}
@@ -146,7 +150,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 
 /* 欲しいもの */
 .wishes{display:grid;gap:8px}
-.wish{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;min-height:56px;padding:8px 12px;border:1px solid var(--line);border-radius:0;cursor:pointer}
+.wish{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:12px;min-height:56px;padding:8px 12px;border:1px solid var(--line);border-radius:0;cursor:pointer}
 .wish.on{border-color:var(--plan);background:var(--plan-soft)}
 .wish input{width:22px;height:22px;accent-color:var(--plan);margin:0}
 .wish .name{font-weight:500;overflow-wrap:anywhere;line-height:1.4}
@@ -313,20 +317,20 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 
 <div class="app">
   <header class="bar" id="bar">
-    <h1>November<small><span class="num">11</span> days left</small></h1>
+    <h1><span data-month>November</span><small><span class="num" data-daysleft>11</span> days left</small></h1>
     <div class="mini">Free to spend <b id="miniFree"></b></div>
   </header>
 
   <div class="night-hero" id="nightHero">
-    <h2>November</h2>
-    <p>Budget ¥100,000 · 11 days left</p>
+    <h2 data-month>November</h2>
+    <p>Budget <span data-budget>¥100,000</span> · <span data-daysleft>11</span> days left</p>
     <button class="pillbtn" type="button" id="nightAdd">＋ Add</button>
     <nav aria-label="Sections">
       <button type="button" aria-current="true" data-goto="Budget">Overview</button>
       <button type="button" data-goto="Paybacks">Paybacks</button>
       <button type="button" data-goto="Wishlist">Wishlist</button>
       <button type="button" data-goto="Charges">Charges</button>
-      <span class="dots" aria-hidden="true">•••</span>
+      <button type="button" class="dots" id="openSettings" aria-label="Budget and data settings">•••</button>
     </nav>
   </div>
 
@@ -341,7 +345,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   </div>
 
   <section class="card" aria-label="Budget">
-    <div class="free-label">Left to spend, wishlist included (budget ¥100,000)</div>
+    <div class="free-label">Left to spend, wishlist included (budget <span data-budget>¥100,000</span>)</div>
     <div class="free num" id="free">¥0</div>
     <div class="hero-sub">
       <span class="pill ok" id="pacePill"></span>
@@ -353,7 +357,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
       <div class="seg over" id="segOver"></div>
       <div class="pace" id="pace"><span>Today's pace</span></div>
     </div>
-    <div class="scale num"><span>0</span><span>50k</span><span>100k</span></div>
+    <div class="scale num"><span>0</span><span id="scaleMid">50k</span><span id="scaleMax">100k</span></div>
     <div class="legend">
       <div class="l-spent"><small>Net spent</small><span class="num" id="lgSpent"></span></div>
       <div class="l-plan"><small>Planned</small><span class="num" id="lgPlan"></span></div>
@@ -375,6 +379,17 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   <section class="card" aria-label="Wishlist">
     <h2>Wishlist <span>Check = buying this month</span></h2>
     <div class="wishes" id="wishes"></div>
+    <button class="more" type="button" id="wishAddOpen">＋ Add an item</button>
+    <form class="add-inline" id="wishForm" hidden novalidate>
+      <label class="field">Item<input type="text" id="wName" placeholder="Winter coat" autocomplete="off" maxlength="60"></label>
+      <div class="two">
+        <label class="field">Price (¥)<input type="number" id="wPrice" inputmode="numeric" min="1" step="1" placeholder="12000"></label>
+        <label class="field">Priority<select id="wPrio"><option value="h">High</option><option value="m" selected>Mid</option><option value="l">Low</option></select></label>
+      </div>
+      <label class="field">Category<select id="wCat"></select></label>
+      <div class="err" id="wErr" role="alert"></div>
+      <div class="actions"><button class="btn ghost" type="button" id="wCancel">Cancel</button><button class="btn" type="submit">Add to wishlist</button></div>
+    </form>
     <div class="wish-foot"><span>Planned this month <b class="num" id="wishTotal"></b></span><span id="wishHint"></span></div>
   </section>
 
@@ -431,6 +446,22 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
       <button class="btn ghost" type="button" data-close>Cancel</button>
       <button class="btn" type="button" id="rcptSave">Save receipt</button>
     </div>
+  </div>
+</div>
+
+<div class="sheet" id="setSheet" role="dialog" aria-modal="true" aria-labelledby="setTitle" hidden>
+  <div class="grip"></div>
+  <h3 id="setTitle">Budget and data</h3>
+  <p class="lead">Everything is saved on this phone only. Nothing is sent anywhere.</p>
+  <form id="setForm" novalidate style="display:grid;gap:14px">
+    <label class="field">Monthly budget (¥)<input class="amt-in" type="number" id="sBudget" inputmode="numeric" min="1000" step="1000"></label>
+    <div class="err" id="sErr" role="alert"></div>
+    <button class="btn" type="submit">Save budget</button>
+  </form>
+  <div style="display:grid;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
+    <p class="lead" id="sDataNote" style="margin:0"></p>
+    <button class="btn ghost" type="button" id="sClear">Start with my own data</button>
+    <button class="btn ghost" type="button" id="sSample">Load sample data</button>
   </div>
 </div>
 
@@ -534,7 +565,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
       <select id="fTx"></select>
     </label>
     <div class="two">
-      <label class="field">Date received<input type="date" id="fDate" value="2026-11-20"></label>
+      <label class="field">Date received<input type="date" id="fDate" value=""></label>
       <label class="chk"><input type="checkbox" id="fPending">Not received yet</label>
     </div>
     <div class="preview" id="fPreview"></div>
@@ -549,7 +580,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script>
-const BUDGET = 100000, DAY = 20, DAYS = 30;
+const TODAY = new Date();
+const DAY = TODAY.getDate(), DAYS = new Date(TODAY.getFullYear(), TODAY.getMonth()+1, 0).getDate();
+const TODAY_MD = `${TODAY.getMonth()+1}/${DAY}`;
+const TODAY_ISO = `${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,"0")}-${String(DAY).padStart(2,"0")}`;
+let BUDGET = 100000, SAMPLE = true;
+const esc = v => String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const yen = n => (n < 0 ? "-¥" : "¥") + Math.abs(Math.round(n)).toLocaleString("en-US");
 const $ = id => document.getElementById(id);
 
@@ -642,6 +678,12 @@ function render(){
   const daysLeft = DAYS - DAY + 1;
 
   // 残り額
+  document.querySelectorAll("[data-month]").forEach(e=>e.textContent = TODAY.toLocaleString("en-US",{month:"long"}));
+  document.querySelectorAll("[data-daysleft]").forEach(e=>e.textContent = daysLeft);
+  document.querySelectorAll("[data-budget]").forEach(e=>e.textContent = yen(BUDGET));
+  document.querySelector(".sync").hidden = !SAMPLE;
+  const k = v => (v>=10000 && v%1000===0) ? (v/1000).toLocaleString("en-US")+"k" : yen(v);
+  $("scaleMid").textContent = k(BUDGET/2); $("scaleMax").textContent = k(BUDGET);
   $("free").textContent = yen(free); $("free").classList.toggle("neg", free < 0);
   $("miniFree").textContent = yen(free);
   $("perDay").textContent = yen(Math.max(free,0)/daysLeft);
@@ -674,7 +716,7 @@ function render(){
     const t = txById(b.tx);
     const mtag = b.method==="cash" ? `<span class="tag">Cash</span>` : `<span class="tag">PayPay${b.via==="shot"?" · screenshot":""}</span>`;
     return `<li class="${b.status==="wait"?"pending":""}">
-      <span class="who">${b.who} ${mtag}</span>
+      <span class="who">${esc(b.who)} ${mtag}</span>
       <span class="link">${short(t.card)} · ${t.d} ${t.m}</span>
       <span class="right"><span class="num">${b.status==="wait"?"Pending ":"+"}${yen(b.amt)}</span>
       ${b.status==="wait"?`<button class="btn sm" type="button" data-receive="${b.id}">Mark received</button>`:`<span class="tag">${b.date}</span>`}</span>
@@ -683,13 +725,14 @@ function render(){
   $("moreBacks").textContent = showAllBacks ? "Show less" : `Show all (${order.length})`;
 
   // 欲しいもの
-  $("wishes").innerHTML = WISH.map(w => `
+  $("wishes").innerHTML = WISH.length ? WISH.map(w => `
     <label class="wish ${w.on?"on":""}">
       <input type="checkbox" id="${w.id}" ${w.on?"checked":""} data-wish="${w.id}">
-      <div><div class="name">${w.name}<span class="prio ${w.prio}">${{h:"High",m:"Mid",l:"Low"}[w.prio]}</span></div>
-      <div class="meta">${w.cat}${w.note?" · "+w.note:""}</div></div>
+      <div><div class="name">${esc(w.name)}<span class="prio ${w.prio}">${{h:"High",m:"Mid",l:"Low"}[w.prio]}</span></div>
+      <div class="meta">${esc(w.cat)}${w.note?" · "+esc(w.note):""}</div></div>
       <span class="num">${yen(w.price)}</span>
-    </label>`).join("");
+      <button class="del" type="button" data-delwish="${w.id}" aria-label="Remove ${esc(w.name)}">×</button>
+    </label>`).join("") : `<div class="empty-note">Nothing on the wishlist yet. Add what you plan to buy.</div>`;
   $("wishTotal").textContent = yen(plan);
   const nextOff = WISH.filter(w=>!w.on).sort((a,b)=>a.price-b.price)[0];
   $("wishHint").textContent = nextOff
@@ -700,7 +743,7 @@ function render(){
   const byCat = {}; CAT_ORDER.forEach(c=>byCat[c]={s:0,p:0});
   TX.flatMap(linesOf).forEach(l=>byCat[l.cat].s+=l.net);
   WISH.filter(w=>w.on).forEach(w=>byCat[w.cat].p+=w.price);
-  const max = Math.max(...CAT_ORDER.map(c=>byCat[c].s+byCat[c].p));
+  const max = Math.max(1, ...CAT_ORDER.map(c=>byCat[c].s+byCat[c].p));
   $("cats").innerHTML = CAT_ORDER.filter(c=>byCat[c].s+byCat[c].p>0)
     .sort((a,b)=>(byCat[b].s+byCat[b].p)-(byCat[a].s+byCat[a].p))
     .map(c=>{const v=byCat[c]; return `<button class="cat ${filter===c?"active":""}" data-cat="${c}" data-jump="1">
@@ -728,14 +771,30 @@ function render(){
       + `<span class="st ${st[0]}">${st[1]}</span>`;
     const splits = t.splits ? `<div class="splits">${t.splits.map(s=>`<div><span>${s[0]} · <em>${s[1]}</em></span><span class="num">${yen(s[2])}</span></div>`).join("")}</div>` : "";
     const bk = BACKS.filter(b=>b.tx===t.id);
-    const backs = bk.length ? `<div class="splits back">${bk.map(b=>`<div><span>Split · ${b.who} (${b.method==="cash"?"Cash":"PayPay"})</span><span class="num ${b.status==="in"?"in":"wait"}">${b.status==="in"?"−"+yen(b.amt):"Pending "+yen(b.amt)}</span></div>`).join("")}</div>` : "";
+    const backs = bk.length ? `<div class="splits back">${bk.map(b=>`<div><span>Split · ${esc(b.who)} (${b.method==="cash"?"Cash":"PayPay"})</span><span class="num ${b.status==="in"?"in":"wait"}">${b.status==="in"?"−"+yen(b.amt):"Pending "+yen(b.amt)}</span></div>`).join("")}</div>` : "";
     const amt = r ? `<s>${yen(t.amt)}</s>${yen(t.amt-r)}` : yen(t.amt);
     return `<li><span class="d num">${t.d}</span><div><div class="m">${t.m}</div><div class="tags">${tags}</div></div><span class="amt num">${amt}</span>${splits}${backs}</li>`;
-  }).join("") : `<li class="empty">No charges match</li>`;
+  }).join("") : `<li class="empty">${TX.length ? "No charges match" : "No charges yet. Card statements will come in here."}</li>`;
   const sum = rows.flatMap(linesOf).filter(l=>filter==="All"||l.cat===filter).reduce((a,l)=>a+l.net,0);
   $("txCount").textContent = `${rows.length} charges · net${filter!=="All"?" ("+filter+")":""}`;
   $("txSum").textContent = yen(sum);
+  save();
 }
+
+// 端末内に保存（ログインなし・サーバー送信なし）
+const STORE = "mf-data-v1";
+function save(){
+  try { localStorage.setItem(STORE, JSON.stringify({v:1, budget:BUDGET, sample:SAMPLE, TX, BACKS, WISH})); } catch(e){}
+}
+function load(){
+  try {
+    const d = JSON.parse(localStorage.getItem(STORE) || "null");
+    if (!d || d.v!==1) return;
+    BUDGET = d.budget || BUDGET; SAMPLE = !!d.sample;
+    TX = d.TX || []; BACKS = d.BACKS || []; WISH = d.WISH || [];
+  } catch(e){}
+}
+const SAMPLE_COPY = JSON.stringify({TX, BACKS, WISH});
 
 // トースト
 let toastTimer;
@@ -759,7 +818,7 @@ function updatePreview(){
     : `${t.m} net <b class="num">${yen(t.amt-received(t))}</b> → <b class="num">${yen(t.amt-received(t)-a)}</b>`;
 }
 function closeAll(){
-  ["sheet","amexSheet","amzSheet","ppSheet","rcptSheet","scrim","menu"].forEach(id=>$(id).hidden=true);
+  ["sheet","amexSheet","amzSheet","ppSheet","rcptSheet","setSheet","scrim","menu"].forEach(id=>$(id).hidden=true);
   $("openForm").hidden=false; $("openForm").setAttribute("aria-expanded","false");
   document.body.style.overflow="";
 }
@@ -777,7 +836,7 @@ function openSheet(show){
   if (show){
     $("fCard").innerHTML = Object.entries(CARDS).map(([k,c])=>`<option value="${k}">${c.name} ${c.label}</option>`).join("");
     const names = [...new Set(BACKS.map(b=>b.who))];
-    $("whoQuick").innerHTML = names.map(n=>`<button type="button" data-who="${n}">${n}</button>`).join("");
+    $("whoQuick").innerHTML = names.map(n=>`<button type="button" data-who="${esc(n)}">${esc(n)}</button>`).join("");
     fillTxSelect(); $("fAmt").focus();
   }
 }
@@ -1038,7 +1097,7 @@ $("addForm").addEventListener("submit", e=>{
   BACKS.push({id:"b"+Date.now(), tx:t.id, who, amt,
     method: document.querySelector('input[name="method"]:checked').value,
     status: pend ? "wait" : "in", date: pend ? "" : `${+mm}/${+dd}`, via:"app"});
-  $("addForm").reset(); $("fDate").value = "2026-11-20";
+  $("addForm").reset(); $("fDate").value = TODAY_ISO;
   closeAll(); render();
   toast(`Saved ${yen(amt)} from ${who}${pend?" as pending":""}`);
 });
@@ -1055,7 +1114,7 @@ document.addEventListener("click", e => {
   const k = e.target.closest("[data-card]");
   if (k){ cardFilter = k.dataset.card; render(); return; }
   const r = e.target.closest("[data-receive]");
-  if (r){ const b = BACKS.find(x=>x.id===r.dataset.receive); b.status="in"; b.date="11/20"; render(); toast(`Marked ${yen(b.amt)} from ${b.who} as received`); return; }
+  if (r){ const b = BACKS.find(x=>x.id===r.dataset.receive); b.status="in"; b.date=TODAY_MD; render(); toast(`Marked ${yen(b.amt)} from ${b.who} as received`); return; }
   if (e.target.id==="moreBacks"){ showAllBacks = !showAllBacks; render(); }
 });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeAll(); });
@@ -1107,6 +1166,56 @@ $("styles").addEventListener("click", e=>{
 });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyStyle);
 new MutationObserver(applyStyle).observe(document.documentElement, {attributes:true, attributeFilter:["data-theme"]});
+// 予算と データの設定
+let clearArmed = false;
+function openSettings(){
+  $("menu").hidden = true; $("setSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true;
+  document.body.style.overflow = "hidden";
+  $("sBudget").value = BUDGET; $("sErr").textContent = ""; clearArmed = false;
+  $("sClear").textContent = "Start with my own data";
+  $("sDataNote").textContent = SAMPLE ? "You are looking at sample data. Clear it to start tracking your own month." : `Your data: ${TX.length} charges, ${BACKS.length} paybacks, ${WISH.length} wishlist items.`;
+}
+$("openSettings").addEventListener("click", openSettings);
+$("setForm").addEventListener("submit", e=>{
+  e.preventDefault();
+  const v = Math.round(+$("sBudget").value || 0);
+  if (v < 1000) return $("sErr").textContent = "Enter a budget of ¥1,000 or more";
+  BUDGET = v; closeAll(); render(); toast(`Budget set to ${yen(v)}`);
+});
+$("sClear").addEventListener("click", ()=>{
+  if (!clearArmed){ clearArmed = true; $("sClear").textContent = "Tap again to clear everything"; return; }
+  TX = []; BACKS = []; WISH = []; SAMPLE = false; filter = "All"; cardFilter = "all";
+  closeAll(); render(); toast("Cleared. Add your first item with ＋");
+});
+$("sSample").addEventListener("click", ()=>{
+  const d = JSON.parse(SAMPLE_COPY); TX = d.TX; BACKS = d.BACKS; WISH = d.WISH; SAMPLE = true;
+  closeAll(); render(); toast("Sample data loaded");
+});
+
+// 欲しいもの：追加・削除
+function wishForm(show){
+  $("wishForm").hidden = !show; $("wishAddOpen").hidden = show;
+  if (show){ $("wCat").innerHTML = CAT_ORDER.map(c=>`<option>${c}</option>`).join(""); $("wErr").textContent = ""; $("wName").focus(); }
+}
+$("wishAddOpen").addEventListener("click", ()=>wishForm(true));
+$("wCancel").addEventListener("click", ()=>{ $("wishForm").reset(); wishForm(false); });
+$("wishForm").addEventListener("submit", e=>{
+  e.preventDefault();
+  const name = $("wName").value.trim(), price = Math.round(+$("wPrice").value || 0);
+  if (!name) return $("wErr").textContent = "Enter what you want to buy";
+  if (price <= 0) return $("wErr").textContent = "Enter a price of ¥1 or more";
+  WISH.push({id:"w"+Date.now(), name, cat:$("wCat").value, price, prio:$("wPrio").value, on:false, note:""});
+  $("wishForm").reset(); wishForm(false); render(); toast(`Added ${name} · ${yen(price)}`);
+});
+$("wishes").addEventListener("click", e=>{
+  const b = e.target.closest("[data-delwish]"); if (!b) return;
+  e.preventDefault();
+  const w = WISH.find(x=>x.id===b.dataset.delwish);
+  WISH = WISH.filter(x=>x!==w); render(); toast(`Removed ${w.name}`);
+});
+
+$("fDate").value = TODAY_ISO;
+load();
 applyStyle();
 render();
 </script>
