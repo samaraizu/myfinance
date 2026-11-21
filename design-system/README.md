@@ -2,49 +2,60 @@
 
 A phone-only household budget app. One screen answers one question: how much can I still spend this month? Everything else (paybacks, the wishlist, categories, card charges) explains that number.
 
+The look is **Night**: floating navy cards on a deeper navy ground, cyan for anything you can act on, lime for money. Dark only.
+
 ## Principles
 
-- **Two colors, nothing more.** `ink` and `accent`. Every grey and tint is one of them mixed into `paper`. No red for errors, no yellow for warnings.
-- **State is shape, not hue.** With two colors, meaning comes from the mark: solid `ink` = spent, `accent` diagonal hatching = planned, dashed `accent` border = pending, `ink` fill with `paper` text = over budget or needs action, `accent` outline = itemized.
-- **Square.** `radius-0` everywhere. Cards, buttons, chips, sheets and the + button all have square corners. No shadows; borders in `line` or `ink` separate layers.
-- **Numbers are monospaced.** Every yen amount and date uses the `num` family with tabular figures so columns line up.
-- **The money comes first.** The amount left (`amount-hero`) is the largest thing on any screen. Only one `amount-hero` per screen.
+- **Cyan acts, lime counts.** `accent` (cyan) marks what you can tap and what is in motion: buttons, the active tab, pending paybacks, planned spend. `money` (lime) is for yen amounts and nothing else. If a number is lime, it is money.
+- **Cards float.** Content sits on `paper` cards with `radius-lg` and `shadow-card` over `bg`. No borders on cards. Inside a card, group things in `ink-soft` wells with `radius-md`.
+- **Round where you touch.** Buttons, chips and the meter are pills (`radius-pill`). The + button is a circle. Tags keep a small `radius-sm`.
+- **State is still shape.** Solid `ink` = spent, `accent` hatching = planned, dashed `accent` border = pending, `ink` fill with `paper` text = over pace or needs action, `accent` outline = itemized.
+- **The money comes first.** `amount-hero` in `money` is the largest number on any screen, once per screen.
 
 ## Color
 
 | Token | Role |
 | --- | --- |
-| `ink` | Text, spent money, primary borders, over-budget and needs-receipt chips |
-| `accent` | Planned spend, paybacks, pace line, primary buttons, focus |
-| `paper` | Cards and sheets |
-| `bg` | Page ground, inputs, meter track |
-| `ink-soft` | Neutral chip fill |
-| `line` | Hairlines (decorative only) |
-| `muted` | Labels, dates, meta lines |
-| `accent-soft` | Selected rows, the light stripe in hatching |
+| `bg` | Page ground, bottom of the hero band |
+| `paper` | Cards, sheets, menu |
+| `ink` | Text, spent money |
+| `accent` | Cyan: buttons, + button, active tab, pace line, planned, pending |
+| `money` | Lime: yen amounts only |
+| `muted` | Labels, dates, inactive tabs |
+| `line` | Hairlines, input and chip borders (decorative) |
+| `ink-soft` | Wells inside cards, input fields |
+| `accent-soft` | Selected rows, dark stripe in hatching |
 
-Hatching for planned spend: `repeating-linear-gradient(-45deg, var(--accent) 0 5px, var(--accent-soft) 5px 9px)`. Over-budget overflow: `ink` stripes at 45° on `paper`.
+Planned-spend hatching: `repeating-linear-gradient(-45deg, var(--accent) 0 5px, var(--accent-soft) 5px 9px)`.
 
-Both themes share the same two hues. In dark, `paper` is a deep green-black and `ink` becomes the light text color; the meanings stay identical.
+## The hero band
+
+The top of the home screen is a full-width band, centered:
+
+- `hero-title` month ("November"), then a `meta`-sized line in `muted`: "Budget ¥100,000 · 11 days left".
+- An `accent` pill button "＋ Add" with `shadow-echo-pill`. It opens the same menu as the + button.
+- A tab row: Overview, Paybacks, Wishlist, Charges, then "•••". Active tab in `accent` with a 2px underline; tapping scrolls to that card.
+- Ground: `bg` at the bottom, rising into a lighter navy, with a soft cyan glow top-right, a faint lime glow bottom-left and fine diagonal lines in `ink` at 5%. No photographs.
+
+The sticky top bar stays hidden until the hero scrolls away, then shows the month and the amount left.
 
 ## Type
 
-- `sans`: IBM Plex Sans for UI text, with Zen Kaku Gothic New as the fallback for Japanese merchant and person names.
-- `num`: IBM Plex Mono for yen amounts, dates and source tags.
-- Both load from Google Fonts: `family=IBM+Plex+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700`.
-- Card headings use `label`: 12px, bold, uppercase, letter-spaced, in `muted`.
+- `sans`: Manrope for UI text, with Zen Kaku Gothic New for Japanese merchant and person names.
+- `num`: Space Grotesk for yen amounts and dates, with tabular figures.
+- Load: `https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Space+Grotesk:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap`.
 
 ## Layout
 
-- One column, max `column` (440px), side gutter `space-4`.
-- Order on the home screen: left to spend → paybacks → wishlist → by category → card charges.
-- The + button (`fab`, bottom right) opens a menu: Import Amex, Add a receipt, Log a payback. Each opens a bottom sheet.
-- Minimum tap target `tap-min`. Inputs and sheet buttons `control`. Input text is 16px so phones do not zoom.
+- One column, max `column` (440px), side gutter `space-4`, `space-3` between cards.
+- Home order: hero band → left to spend → paybacks → wishlist → by category → card charges.
+- The round + button (`fab`, bottom right, `shadow-echo-fab`) opens a menu: Import Amex, Import Amazon, Import PayPay, Add a receipt, Log a payback. Each opens a bottom sheet with `radius-sheet` top corners.
+- Minimum tap target `tap-min`. Inputs and sheet buttons `control`. Input text 16px so phones do not zoom.
 
 ## Voice
 
-Plain English, short labels that say what happens: "Add 3 to sheet", "Mark received", "Save receipt". Toasts confirm the result: "Added 3 Amex charges · ¥6,480". Errors say how to fix: "Only ¥3,200 of this charge is left to split".
+Plain English, short labels that say what happens: "Add 3 to sheet", "Split 1 charge", "Mark received". Toasts confirm the result: "Logged 2 PayPay paybacks · ¥4,425". Errors say how to fix: "Only ¥3,200 of this charge is left to split".
 
 ## Source
 
-Tokens are taken from `ui/prototype.html` in the myfinance repository. `muted` was raised from 58% to 66% ink so secondary text passes 4.5:1 on `bg`.
+Tokens are taken from the Night style in `ui/prototype.html` in the myfinance repository. The earlier Ledger look (two colors, square corners, light and dark) is kept in the prototype's style switcher but is no longer the system.
