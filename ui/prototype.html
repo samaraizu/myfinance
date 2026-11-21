@@ -187,6 +187,20 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .kv dd{margin:0;font-weight:500;overflow-wrap:anywhere}
 .matchbox{border:1px solid var(--accent);background:var(--accent-soft);padding:10px 12px;font-size:13px;display:grid;gap:2px}
 .matchbox small{color:var(--muted);font-size:11px;letter-spacing:.06em}
+/* Amazon取り込み */
+.order{border:1px solid var(--line);padding:10px 12px;display:grid;gap:6px}
+.order.on{border-color:var(--accent)}
+.order.skip{color:var(--muted)}
+.order head,.order .oh{display:flex;align-items:center;gap:10px}
+.order .oh input{width:22px;height:22px;accent-color:var(--accent);margin:0}
+.order .oh .t{flex:1;min-width:0;font-weight:700}
+.order .oh .num{font-weight:600}
+.order .mt{font-size:12px;color:var(--muted)}
+.order .mt b{color:var(--accent);font-weight:500}
+.order .rows{border-top:1px solid var(--line)}
+.order .rows li{grid-template-columns:minmax(0,1fr) auto;padding:8px 0}
+.order .rows li:last-child{border-bottom:0}
+.order .rows select{grid-column:1 / 3}
 /* Amex取り込み */
 .drop{display:grid;place-items:center;gap:6px;text-align:center;min-height:170px;padding:20px;border:1px dashed var(--accent);background:var(--accent-soft);cursor:pointer;color:var(--ink)}
 .drop b{font-size:15px}
@@ -265,7 +279,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <span class="src sample">Sample</span>
     <span class="src">freee <b>11/20 08:12</b></span>
     <span class="src">Amex <b id="amexSync">11/09</b></span>
-    <span class="src">Amazon <b>11/19</b></span>
+    <span class="src">Amazon <b id="amzSync">11/10</b></span>
     <span class="src">PayPay <b>11/18</b></span>
     <span class="src">Receipts <b id="rcptCount">14</b></span>
   </div>
@@ -329,6 +343,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 
 <div class="menu" id="menu" role="menu" hidden>
   <button type="button" role="menuitem" id="goAmex"><span class="ic">AMEX</span><span><b>Import Amex</b><small>From a payment screenshot</small></span></button>
+  <button type="button" role="menuitem" id="goAmz"><span class="ic">AMZN</span><span><b>Import Amazon</b><small>From an order history screenshot</small></span></button>
   <button type="button" role="menuitem" id="goRcpt"><span class="ic">RCPT</span><span><b>Add a receipt</b><small>Take a photo or pick from library</small></span></button>
   <button type="button" role="menuitem" id="goBack"><span class="ic">¥</span><span><b>Log a payback</b><small>Cash or PayPay you got back</small></span></button>
 </div>
@@ -358,6 +373,31 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Cancel</button>
       <button class="btn" type="button" id="rcptSave">Save receipt</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="amzSheet" role="dialog" aria-modal="true" aria-labelledby="amzTitle" hidden>
+  <div class="grip"></div>
+  <h3 id="amzTitle">Import Amazon</h3>
+  <p class="lead">Share screenshots of Amazon's order history. Each order is matched to its card charge and split by item.</p>
+  <div id="amzPick" style="display:grid;gap:8px">
+    <label class="drop" for="amzFile">
+      <input type="file" id="amzFile" accept="image/*" multiple>
+      <b>Choose screenshots</b>
+      <small>Open an order's details for item prices. Several at once is fine.</small>
+    </label>
+    <button class="linkbtn" type="button" id="amzSample">Try with a sample screenshot</button>
+  </div>
+  <div class="reading" id="amzReading" hidden><span id="amzReadingText">Reading…</span><div class="track"><i></i></div></div>
+  <div id="amzReview" hidden style="display:none;gap:12px">
+    <div class="shots" id="amzShots"></div>
+    <div id="amzOrders" style="display:grid;gap:12px"></div>
+    <div class="sumline"><span id="amzCount"></span><b id="amzTotal"></b></div>
+    <p class="lead" style="margin:0">Prototype: reading is simulated with sample orders.</p>
+    <div class="actions">
+      <button class="btn ghost" type="button" data-close>Cancel</button>
+      <button class="btn" type="button" id="amzAdd">Split charges</button>
     </div>
   </div>
 </div>
@@ -440,8 +480,7 @@ const CARDS = {
 // src: amz=Amazon注文スプシ / rcp=レシート（全件freeeカード明細が土台）
 // st: ok=一致 / fill=内訳でカテゴリ補完 / miss=レシート未登録
 let TX = [
-  {id:"t01", d:"11/19", card:"sub",  m:"AMAZON.CO.JP", amt:4280, src:["amz"], st:"fill",
-    splits:[["Laundry detergent refill ×2","Household",1280],["USB-C cable 2m","Gadgets",3000]]},
+  {id:"t01", d:"11/19", card:"sub",  m:"AMAZON.CO.JP", amt:4280, src:[], st:"miss", cat:"Other"},
   {id:"t02", d:"11/18", card:"main", m:"SEIJO ISHII JIYUGAOKA", amt:3612, src:["rcp"], st:"ok", cat:"Food"},
   {id:"t03", d:"11/17", card:"main", m:"BLUE BOTTLE COFFEE", amt:680, src:["rcp"], st:"ok", cat:"Cafe"},
   {id:"t04", d:"11/16", card:"main", m:"UBER EATS", amt:2450, src:[], st:"ok", cat:"Food"},
@@ -464,6 +503,12 @@ let TX = [
 // レシート読み取り結果の想定（試作では固定）
 const RCPT_SAMPLE = {store:"DON QUIJOTE", d:"11/03", total:3210, pay:"Card ••4021",
   items:[["Shampoo refill","Household",1280],["Snacks & drinks","Food",860],["Phone stand","Gadgets",1070]]};
+// Amazon注文履歴スクショから読み取った想定（試作では固定）
+const AMZ_SAMPLE = [
+  {no:"249-1180", d:"11/21", total:2180, items:[["Kitchen paper ×6","Household",2180]]},
+  {no:"249-0937", d:"11/19", total:4280, items:[["Laundry detergent refill ×2","Household",1280],["USB-C cable 2m","Gadgets",3000]]},
+  {no:"249-0412", d:"11/10", total:12800, items:[["Mechanical keyboard","Gadgets",12800]]},
+];
 // Amexスクショから読み取った想定の行（試作では固定）。st: new=取り込み対象 / dup=シートにある / pend=確定前
 const AMEX_SAMPLE = [
   {d:"11/21", m:"UBER *TRIP", amt:1980, cat:"Transport", st:"pend"},
@@ -587,7 +632,7 @@ function render(){
   const stLabel = {ok:["ok","Matched"], fill:["fill","Itemized"], miss:["miss","Needs receipt"]};
   const srcLabel = {amz:["amz","Amazon"], rcp:["rcp","Receipt"], amx:["amx","Amex sheet"]};
   $("tx").innerHTML = rows.length ? rows.map(t=>{
-    const st = stLabel[t.st], r = received(t);
+    const st = (t.st==="miss" && /AMAZON/.test(t.m)) ? ["miss","Needs order"] : stLabel[t.st], r = received(t);
     const tags = `<span class="tag card">${short(t.card)}</span>`
       + t.src.map(s=>`<span class="tag ${srcLabel[s][0]}">${srcLabel[s][1]}</span>`).join("")
       + (t.cat?`<span class="tag">${t.cat}</span>`:"") + (t.note?`<span class="tag">${t.note}</span>`:"")
@@ -625,7 +670,7 @@ function updatePreview(){
     : `${t.m} net <b class="num">${yen(t.amt-received(t))}</b> → <b class="num">${yen(t.amt-received(t)-a)}</b>`;
 }
 function closeAll(){
-  ["sheet","amexSheet","rcptSheet","scrim","menu"].forEach(id=>$(id).hidden=true);
+  ["sheet","amexSheet","amzSheet","rcptSheet","scrim","menu"].forEach(id=>$(id).hidden=true);
   $("openForm").hidden=false; $("openForm").setAttribute("aria-expanded","false");
   document.body.style.overflow="";
 }
@@ -650,6 +695,65 @@ function openSheet(show){
 $("openForm").addEventListener("click", ()=>toggleMenu($("menu").hidden));
 $("goBack").addEventListener("click", ()=>openSheet(true));
 $("goAmex").addEventListener("click", ()=>openAmex());
+$("goAmz").addEventListener("click", ()=>openAmz());
+
+// Amazon取り込み：注文履歴スクショ → 注文と品目を読む → カードのAMAZON明細と合計額で突合 → 品目で分割
+let amzOrders = [], amzShots = [];
+function amzStep(step){
+  $("amzPick").style.display = step==="pick" ? "grid" : "none";
+  $("amzReading").hidden = step!=="reading";
+  $("amzReview").hidden = step!=="review"; $("amzReview").style.display = step==="review" ? "grid" : "none";
+}
+function openAmz(){
+  $("menu").hidden = true; $("amzSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true;
+  document.body.style.overflow = "hidden"; amzStep("pick"); $("amzFile").value = "";
+}
+function readAmz(shots){
+  amzShots = shots; amzStep("reading");
+  $("amzReadingText").textContent = `Reading ${shots.length} screenshot${shots.length>1?"s":""}…`;
+  setTimeout(()=>{
+    const md = d => { const [m,dd]=d.split("/"); return +m*31 + +dd; };
+    amzOrders = AMZ_SAMPLE.map((o,i)=>{
+      const tx = TX.find(t=>/AMAZON/.test(t.m) && t.amt===o.total && Math.abs(md(t.d)-md(o.d))<=3);
+      const st = !tx ? "nocharge" : tx.src.includes("amz") ? "done" : "new";
+      return {...o, i, items:o.items.map(x=>[...x]), tx, st, on: st==="new"};
+    });
+    renderAmz(); amzStep("review");
+  }, 1100);
+}
+function renderAmz(){
+  $("amzShots").innerHTML = amzShots.map(s=>`<div class="shot" style="${s.url?`background-image:url(${s.url})`:""}">${s.url?"":s.name}</div>`).join("");
+  const why = {done:"Already split · skipped", nocharge:"No card charge yet · import again after it posts"};
+  $("amzOrders").innerHTML = amzOrders.map(o=>`<div class="order ${o.on?"on":""} ${o.st!=="new"?"skip":""}">
+    <div class="oh"><input type="checkbox" data-aord="${o.i}" ${o.on?"checked":""} ${o.st!=="new"?"disabled":""} aria-label="Split order ${o.no}">
+      <span class="t">Order ${o.no} · <span class="num">${o.d}</span></span><span class="num">${yen(o.total)}</span></div>
+    <div class="mt">${o.st==="new" ? `Matches <b>${short(o.tx.card)} · ${o.tx.d} AMAZON.CO.JP ${yen(o.tx.amt)}</b>` : why[o.st]}</div>
+    ${o.st==="new" ? `<ul class="rows">${o.items.map((it,k)=>`<li><span class="m">${it[0]}</span><span class="amt num">${yen(it[2])}</span>
+      <select data-aitem="${o.i}-${k}" aria-label="Category for ${it[0]}">${CAT_ORDER.map(c=>`<option ${c===it[1]?"selected":""}>${c}</option>`).join("")}</select></li>`).join("")}</ul>` : ""}
+  </div>`).join("");
+  const pick = amzOrders.filter(o=>o.on);
+  $("amzCount").textContent = `${pick.length} of ${amzOrders.length} orders selected`;
+  $("amzTotal").textContent = yen(pick.reduce((a,o)=>a+o.total,0));
+  $("amzAdd").disabled = !pick.length;
+  $("amzAdd").textContent = pick.length ? `Split ${pick.length} charge${pick.length>1?"s":""}` : "Nothing to split";
+}
+$("amzFile").addEventListener("change", e=>{
+  const files = [...e.target.files]; if (!files.length) return;
+  readAmz(files.map(f=>({name:f.name, url:URL.createObjectURL(f)})));
+});
+$("amzSample").addEventListener("click", ()=>readAmz([{name:"IMG_2050"}]));
+$("amzOrders").addEventListener("change", e=>{
+  const a = e.target.dataset;
+  if (a.aord!==undefined){ amzOrders[+a.aord].on = e.target.checked; renderAmz(); }
+  if (a.aitem!==undefined){ const [o,k] = a.aitem.split("-").map(Number); amzOrders[o].items[k][1] = e.target.value; }
+});
+$("amzAdd").addEventListener("click", ()=>{
+  const pick = amzOrders.filter(o=>o.on);
+  pick.forEach(o=>{ const t = o.tx; t.splits = o.items.map(x=>[...x]); delete t.cat; t.src = [...new Set([...t.src,"amz"])]; t.st = "fill"; });
+  $("amzSync").textContent = "just now";
+  closeAll(); render();
+  toast(`Split ${pick.length} Amazon charge${pick.length>1?"s":""} into ${pick.reduce((a,o)=>a+o.items.length,0)} items`);
+});
 $("goRcpt").addEventListener("click", ()=>openRcpt());
 
 // レシート登録：撮影 or ライブラリ → 読み取り → カード明細と突合 → 保存
