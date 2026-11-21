@@ -233,6 +233,13 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .kv dd{margin:0;font-weight:500;overflow-wrap:anywhere}
 .matchbox{border:1px solid var(--accent);background:var(--accent-soft);padding:10px 12px;font-size:13px;display:grid;gap:2px}
 .matchbox small{color:var(--muted);font-size:11px;letter-spacing:.06em}
+.ritems{border-top:1px solid var(--line)}
+.ritems li{grid-template-columns:minmax(0,1fr) 6.5em auto!important;gap:6px 8px}
+.ritems input{font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:0;min-height:40px;padding:0 8px;width:100%;min-width:0}
+.ritems input.num{text-align:right}
+.ritems select{grid-column:1 / 4!important}
+.ritems .del{font:inherit;font-size:18px;color:var(--muted);background:none;border:0;width:32px;height:40px;cursor:pointer}
+.skin-night .ritems input{border-radius:10px}
 /* Amazon取り込み */
 .order{border:1px solid var(--line);padding:10px 12px;display:grid;gap:6px}
 .order.on{border-color:var(--accent)}
@@ -425,7 +432,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 <div class="sheet" id="rcptSheet" role="dialog" aria-modal="true" aria-labelledby="rcptTitle" hidden>
   <div class="grip"></div>
   <h3 id="rcptTitle">Add a receipt</h3>
-  <p class="lead">The receipt is matched to a card charge, and its items fill in the categories.</p>
+  <p class="lead">A receipt fills in the categories of a card charge. Paid in cash or no charge yet? It is added as spending.</p>
   <div id="rcptPick" style="display:grid;gap:8px">
     <div class="pick2">
       <label for="rcptCam"><input type="file" id="rcptCam" accept="image/*" capture="environment"><span class="ic2">◉</span><b>Take photo</b></label>
@@ -437,11 +444,23 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   <div id="rcptReview" hidden style="display:none;gap:12px">
     <div class="rcpt">
       <div class="shot" id="rcptShot"></div>
-      <dl class="kv" id="rcptKv"></dl>
+      <div style="display:grid;gap:8px;min-width:0">
+        <label class="field">Store<input type="text" id="rStore" autocomplete="off" maxlength="60" placeholder="Store name"></label>
+        <label class="field">Total (¥)<input type="number" id="rTotal" inputmode="numeric" min="1" step="1" placeholder="0"></label>
+      </div>
+    </div>
+    <div class="two">
+      <label class="field">Date<input type="date" id="rDate"></label>
+      <label class="field">Paid with<select id="rPay"></select></label>
     </div>
     <div class="matchbox" id="rcptMatch"></div>
-    <ul class="rows" id="rcptRows"></ul>
-    <p class="lead" style="margin:0">Prototype: reading is simulated with a sample receipt.</p>
+    <div class="field">Items
+      <ul class="rows ritems" id="rcptRows"></ul>
+      <button class="linkbtn" type="button" id="rAddItem" style="justify-self:start">＋ Add an item</button>
+    </div>
+    <div class="sumline"><span id="rSumLabel">Items add up to</span><b id="rItemsSum"></b></div>
+    <div class="err" id="rErr" role="alert"></div>
+    <p class="lead" style="margin:0" id="rNote">Check the details, then save. Reading the photo automatically comes later.</p>
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Cancel</button>
       <button class="btn" type="button" id="rcptSave">Save receipt</button>
@@ -593,6 +612,7 @@ const CARDS = {
   main: {name:"Main", label:"Visa ••4021"},
   sub:  {name:"Sub",  label:"JCB ••8830"},
   amex: {name:"Amex", label:"Amex ••1005"},
+  cash: {name:"Cash", label:"Cash"},
 };
 
 // src: amz=Amazon注文履歴スクショ（スプシ取り込みはなし） / rcp=レシート（全件freeeカード明細が土台）
@@ -664,7 +684,7 @@ const received = t => BACKS.filter(b=>b.tx===t.id && b.status==="in").reduce((a,
 const pending  = t => BACKS.filter(b=>b.tx===t.id && b.status==="wait").reduce((a,b)=>a+b.amt,0);
 const linesOf = t => (t.splits ? t.splits.map(s=>({cat:s[1], amt:s[2]})) : [{cat:t.cat, amt:t.amt}])
   .map(l => ({...l, net: l.amt - received(t) * l.amt / t.amt}));  // 受け取り分は内訳に按分
-const short = c => `${CARDS[c].name}${CARDS[c].label.slice(-4)}`;
+const short = c => c==="cash" ? "Cash" : `${CARDS[c].name}${CARDS[c].label.slice(-4)}`;
 
 function render(){
   const cardTotal = TX.reduce((a,t)=>a+t.amt,0);
@@ -717,7 +737,7 @@ function render(){
     const mtag = b.method==="cash" ? `<span class="tag">Cash</span>` : `<span class="tag">PayPay${b.via==="shot"?" · screenshot":""}</span>`;
     return `<li class="${b.status==="wait"?"pending":""}">
       <span class="who">${esc(b.who)} ${mtag}</span>
-      <span class="link">${short(t.card)} · ${t.d} ${t.m}</span>
+      <span class="link">${short(t.card)} · ${t.d} ${esc(t.m)}</span>
       <span class="right"><span class="num">${b.status==="wait"?"Pending ":"+"}${yen(b.amt)}</span>
       ${b.status==="wait"?`<button class="btn sm" type="button" data-receive="${b.id}">Mark received</button>`:`<span class="tag">${b.date}</span>`}</span>
     </li>`}).join("") : `<li class="empty">No paybacks yet</li>`;
@@ -769,11 +789,11 @@ function render(){
       + t.src.map(s=>`<span class="tag ${srcLabel[s][0]}">${srcLabel[s][1]}</span>`).join("")
       + (t.cat?`<span class="tag">${t.cat}</span>`:"") + (t.note?`<span class="tag">${t.note}</span>`:"")
       + `<span class="st ${st[0]}">${st[1]}</span>`;
-    const splits = t.splits ? `<div class="splits">${t.splits.map(s=>`<div><span>${s[0]} · <em>${s[1]}</em></span><span class="num">${yen(s[2])}</span></div>`).join("")}</div>` : "";
+    const splits = t.splits ? `<div class="splits">${t.splits.map(s=>`<div><span>${esc(s[0])} · <em>${s[1]}</em></span><span class="num">${yen(s[2])}</span></div>`).join("")}</div>` : "";
     const bk = BACKS.filter(b=>b.tx===t.id);
     const backs = bk.length ? `<div class="splits back">${bk.map(b=>`<div><span>Split · ${esc(b.who)} (${b.method==="cash"?"Cash":"PayPay"})</span><span class="num ${b.status==="in"?"in":"wait"}">${b.status==="in"?"−"+yen(b.amt):"Pending "+yen(b.amt)}</span></div>`).join("")}</div>` : "";
     const amt = r ? `<s>${yen(t.amt)}</s>${yen(t.amt-r)}` : yen(t.amt);
-    return `<li><span class="d num">${t.d}</span><div><div class="m">${t.m}</div><div class="tags">${tags}</div></div><span class="amt num">${amt}</span>${splits}${backs}</li>`;
+    return `<li><span class="d num">${t.d}</span><div><div class="m">${esc(t.m)}</div><div class="tags">${tags}</div></div><span class="amt num">${amt}</span>${splits}${backs}</li>`;
   }).join("") : `<li class="empty">${TX.length ? "No charges match" : "No charges yet. Card statements will come in here."}</li>`;
   const sum = rows.flatMap(linesOf).filter(l=>filter==="All"||l.cat===filter).reduce((a,l)=>a+l.net,0);
   $("txCount").textContent = `${rows.length} charges · net${filter!=="All"?" ("+filter+")":""}`;
@@ -805,7 +825,7 @@ function fillTxSelect(){
   const card = $("fCard").value;
   $("fTx").innerHTML = TX.filter(t=>t.card===card).map(t=>{
     const left = t.amt - received(t) - pending(t);
-    return `<option value="${t.id}">${t.d} ${t.m} ${yen(t.amt)}${left<t.amt?` (${yen(left)} left)`:""}</option>`}).join("");
+    return `<option value="${t.id}">${t.d} ${esc(t.m)} ${yen(t.amt)}${left<t.amt?` (${yen(left)} left)`:""}</option>`}).join("");
   updatePreview();
 }
 function updatePreview(){
@@ -815,7 +835,7 @@ function updatePreview(){
   if (!t || !a){ $("fPreview").textContent = ""; return; }
   $("fPreview").innerHTML = $("fPending").checked
     ? `Adds <b class="num">${yen(a)}</b> to pending. Net spend stays the same until it arrives`
-    : `${t.m} net <b class="num">${yen(t.amt-received(t))}</b> → <b class="num">${yen(t.amt-received(t)-a)}</b>`;
+    : `${esc(t.m)} net <b class="num">${yen(t.amt-received(t))}</b> → <b class="num">${yen(t.amt-received(t)-a)}</b>`;
 }
 function closeAll(){
   ["sheet","amexSheet","amzSheet","ppSheet","rcptSheet","setSheet","scrim","menu"].forEach(id=>$(id).hidden=true);
@@ -881,10 +901,10 @@ function renderPP(){
   const why = {dup:"Already logged · skipped", out:"Payment you made · not a payback"};
   $("ppRows").innerHTML = ppRows.map(r=>{
     const t = r.back ? txById(r.back.tx) : null;
-    const body = r.st==="settle" ? `<div class="mt">Settles pending payback · <b>${short(t.card)} · ${t.d} ${t.m}</b></div>`
+    const body = r.st==="settle" ? `<div class="mt">Settles pending payback · <b>${short(t.card)} · ${t.d} ${esc(t.m)}</b></div>`
       : r.st==="new" ? `<div class="mt">${r.msg?`“${r.msg}” · `:""}Pick the charge it splits</div>
           <select data-ptx="${r.i}" aria-label="Charge for ${r.who}" style="font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:0;min-height:40px;padding:0 8px;min-width:0">
-          ${TX.map(x=>`<option value="${x.id}" ${x.id===r.tx?"selected":""}>${short(x.card)} · ${x.d} ${x.m} ${yen(x.amt)}</option>`).join("")}</select>`
+          ${TX.map(x=>`<option value="${x.id}" ${x.id===r.tx?"selected":""}>${short(x.card)} · ${x.d} ${esc(x.m)} ${yen(x.amt)}</option>`).join("")}</select>`
       : `<div class="mt">${why[r.st]}</div>`;
     return `<div class="order ${r.on?"on":""} ${r.st==="dup"||r.st==="out"?"skip":""}">
       <div class="oh"><input type="checkbox" data-pp="${r.i}" ${r.on?"checked":""} ${r.st==="dup"||r.st==="out"?"disabled":""} aria-label="Log ${r.who}">
@@ -988,41 +1008,90 @@ function openRcpt(){
   $("menu").hidden = true; $("rcptSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true;
   document.body.style.overflow = "hidden"; rcptStep("pick"); $("rcptCam").value = $("rcptLib").value = "";
 }
-function readRcpt(url){
+const mdOf = iso => { const [,m,d] = iso.split("-"); return `${+m}/${+d}`; };
+const mdNum = md => { const [m,d] = md.split("/"); return +m*31 + +d; };
+function readRcpt(url, sample){
   rcptStep("reading");
+  $("rcptReadingText").textContent = sample ? "Reading sample receipt…" : "Opening photo…";
   setTimeout(()=>{
-    rcpt = {...RCPT_SAMPLE, items: RCPT_SAMPLE.items.map(i=>[...i]), url};
-    // 同じ金額で、日付が前後3日以内のカード明細を候補にする
-    const md = d => { const [m,dd]=d.split("/"); return +m*31 + +dd; };
-    rcptMatchTx = TX.find(t=>t.amt===rcpt.total && Math.abs(md(t.d)-md(rcpt.d))<=3 && !t.src.includes("rcp")) || null;
+    rcpt = sample
+      ? {store:RCPT_SAMPLE.store, date:`${TODAY.getFullYear()}-11-03`, total:RCPT_SAMPLE.total, pay:"main", items:RCPT_SAMPLE.items.map(i=>[...i])}
+      : {store:"", date:TODAY_ISO, total:0, pay:"cash", items:[["","Food",0]]};
     $("rcptShot").style.backgroundImage = url ? `url(${url})` : "";
     $("rcptShot").textContent = url ? "" : "SAMPLE";
-    $("rcptKv").innerHTML = `<dt>Store</dt><dd>${rcpt.store}</dd><dt>Date</dt><dd class="num">${rcpt.d}</dd><dt>Total</dt><dd class="num">${yen(rcpt.total)}</dd><dt>Paid</dt><dd>${rcpt.pay}</dd>`;
-    $("rcptMatch").innerHTML = rcptMatchTx
-      ? `<small>MATCHED CARD CHARGE</small><span>${short(rcptMatchTx.card)} · ${rcptMatchTx.d} ${rcptMatchTx.m}</span><span class="num">${yen(rcptMatchTx.amt)} · same amount</span>`
-      : `<small>NO MATCHING CHARGE</small><span>Saved as a receipt only. It will match when the card charge comes in.</span>`;
-    $("rcptRows").innerHTML = rcpt.items.map((it,i)=>`<li style="grid-template-columns:minmax(0,1fr) auto">
-      <span class="m">${it[0]}</span><span class="amt num">${yen(it[2])}</span>
-      <select data-rcat="${i}" style="grid-column:1 / 3" aria-label="Category for ${it[0]}">${CAT_ORDER.map(c=>`<option ${c===it[1]?"selected":""}>${c}</option>`).join("")}</select></li>`).join("");
+    $("rStore").value = rcpt.store; $("rTotal").value = rcpt.total || ""; $("rDate").value = rcpt.date;
+    $("rPay").innerHTML = Object.entries(CARDS).map(([k,c])=>`<option value="${k}" ${k===rcpt.pay?"selected":""}>${k==="cash"?"Cash":c.name+" "+c.label}</option>`).join("");
+    $("rErr").textContent = "";
+    renderRcptItems(); updateRcpt();
     rcptStep("review");
-  }, 1100);
+    if (!sample) $("rStore").focus();
+  }, sample ? 900 : 300);
 }
+function renderRcptItems(){
+  $("rcptRows").innerHTML = rcpt.items.map((it,i)=>`<li>
+    <input type="text" data-rname="${i}" value="${esc(it[0])}" placeholder="Item" aria-label="Item name" maxlength="60">
+    <input class="num" type="number" inputmode="numeric" data-ramt="${i}" value="${it[2]||""}" placeholder="¥" aria-label="Item amount">
+    <button class="del" type="button" data-rdel="${i}" aria-label="Remove item" ${rcpt.items.length<2?"disabled":""}>×</button>
+    <select data-rcat="${i}" aria-label="Category">${CAT_ORDER.map(c=>`<option ${c===it[1]?"selected":""}>${c}</option>`).join("")}</select></li>`).join("");
+}
+function findMatch(){
+  if (rcpt.pay==="cash" || !rcpt.total) return null;
+  return TX.find(t=>t.card===rcpt.pay && t.amt===rcpt.total && Math.abs(mdNum(t.d)-mdNum(mdOf(rcpt.date)))<=3 && !t.src.includes("rcp")) || null;
+}
+function updateRcpt(){
+  rcpt.store = $("rStore").value.trim(); rcpt.total = Math.round(+$("rTotal").value || 0);
+  rcpt.date = $("rDate").value || TODAY_ISO; rcpt.pay = $("rPay").value;
+  if (rcpt.items.length===1 && rcpt.total && !rcpt.items[0][2]) { rcpt.items[0][2] = rcpt.total; const el = document.querySelector('[data-ramt="0"]'); if (el) el.value = rcpt.total; }
+  rcptMatchTx = findMatch();
+  const sum = rcpt.items.reduce((a,i)=>a+(+i[2]||0),0);
+  $("rItemsSum").textContent = yen(sum);
+  $("rSumLabel").textContent = rcpt.total && sum!==rcpt.total ? `Items add up to (total is ${yen(rcpt.total)})` : "Items add up to";
+  $("rcptMatch").innerHTML = rcptMatchTx
+    ? `<small>MATCHED CARD CHARGE</small><span>${short(rcptMatchTx.card)} · ${rcptMatchTx.d} ${esc(rcptMatchTx.m)}</span><span class="num">${yen(rcptMatchTx.amt)} · same amount</span>`
+    : `<small>${rcpt.pay==="cash" ? "CASH" : "NO MATCHING CHARGE YET"}</small><span>Saved as spending of ${yen(rcpt.total||0)}${rcpt.pay==="cash"?"":` on ${short(rcpt.pay)}`}.</span>`;
+}
+["rStore","rTotal","rDate","rPay"].forEach(id=>$(id).addEventListener("input", updateRcpt));
+$("rcptRows").addEventListener("input", e=>{
+  const d = e.target.dataset;
+  if (d.rname!==undefined) rcpt.items[+d.rname][0] = e.target.value;
+  if (d.ramt!==undefined) rcpt.items[+d.ramt][2] = Math.round(+e.target.value || 0);
+  if (d.rcat!==undefined) rcpt.items[+d.rcat][1] = e.target.value;
+  updateRcpt();
+});
+$("rcptRows").addEventListener("change", e=>{ const i = e.target.dataset.rcat; if (i!==undefined){ rcpt.items[+i][1] = e.target.value; } });
+$("rcptRows").addEventListener("click", e=>{
+  const b = e.target.closest("[data-rdel]"); if (!b) return;
+  rcpt.items.splice(+b.dataset.rdel, 1); renderRcptItems(); updateRcpt();
+});
+$("rAddItem").addEventListener("click", ()=>{
+  const left = rcpt.total - rcpt.items.reduce((a,i)=>a+(+i[2]||0),0);
+  rcpt.items.push(["", rcpt.items[rcpt.items.length-1]?.[1] || "Food", left>0?left:0]);
+  renderRcptItems(); updateRcpt(); document.querySelector(`[data-rname="${rcpt.items.length-1}"]`)?.focus();
+});
 ["rcptCam","rcptLib"].forEach(id=>$(id).addEventListener("change", e=>{
-  const f = e.target.files[0]; if (f) readRcpt(URL.createObjectURL(f));
+  const f = e.target.files[0]; if (f) readRcpt(URL.createObjectURL(f), false);
 }));
-$("rcptSample").addEventListener("click", ()=>readRcpt(""));
-$("rcptRows").addEventListener("change", e=>{ const i = e.target.dataset.rcat; if (i!==undefined) rcpt.items[+i][1] = e.target.value; });
+$("rcptSample").addEventListener("click", ()=>readRcpt("", true));
 $("rcptSave").addEventListener("click", ()=>{
+  updateRcpt();
+  const items = rcpt.items.filter(i=>(+i[2]||0)>0).map(i=>[i[0].trim() || rcpt.store || "Item", i[1], +i[2]]);
+  const sum = items.reduce((a,i)=>a+i[2],0);
+  if (!rcpt.store) return $("rErr").textContent = "Enter the store name";
+  if (rcpt.total <= 0) return $("rErr").textContent = "Enter the total of ¥1 or more";
+  if (sum !== rcpt.total) return $("rErr").textContent = `Items add up to ${yen(sum)} but the total is ${yen(rcpt.total)}. Fix an amount or add an item.`;
+  const cats = new Set(items.map(i=>i[1]));
+  const apply = t => { if (cats.size > 1){ t.splits = items; delete t.cat; t.st = "fill"; } else { delete t.splits; t.cat = [...cats][0]; t.st = "ok"; } };
+  let msg;
   if (rcptMatchTx){
-    const t = rcptMatchTx;
-    t.src = [...new Set([...t.src, "rcp"])];
-    const cats = new Set(rcpt.items.map(i=>i[1]));
-    if (cats.size > 1){ t.splits = rcpt.items.map(i=>[...i]); delete t.cat; t.st = "fill"; }
-    else { t.cat = [...cats][0]; t.st = "ok"; }
+    const t = rcptMatchTx; t.src = [...new Set([...t.src, "rcp"])]; apply(t);
+    msg = `Receipt matched to ${t.m} · ${items.length} item${items.length>1?"s":""}`;
+  } else {
+    const t = {id:"r"+Date.now(), d:mdOf(rcpt.date), card:rcpt.pay, m:rcpt.store, amt:rcpt.total, src:["rcp"]}; apply(t);
+    TX.push(t); TX.sort((a,b)=>mdNum(b.d)-mdNum(a.d));
+    msg = `Added ${rcpt.store} · ${yen(rcpt.total)}`;
   }
   $("rcptCount").textContent = +$("rcptCount").textContent + 1;
-  closeAll(); render();
-  toast(rcptMatchTx ? `Receipt matched to ${rcptMatchTx.m} · ${rcpt.items.length} items` : "Receipt saved");
+  closeAll(); render(); toast(msg);
 });
 $("cancelForm").addEventListener("click", closeAll);
 $("scrim").addEventListener("click", closeAll);
