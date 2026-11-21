@@ -1,7 +1,7 @@
 <title>myfinance Wallet</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&family=Work+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&family=Roboto+Mono:wght@400;500;600&display=swap">
 <style>
 /* Layout: phone-only single column. Left to spend → paybacks → wishlist → categories → charges. ＋ button opens a bottom sheet to log a payback */
 /* Color: 2色だけ。墨（--ink）とみどり（--accent）。灰色・薄い面はすべてこの2色を紙色に混ぜて作る */
@@ -42,6 +42,15 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .mini{font-size:12px;color:var(--muted);text-align:right;opacity:0;transition:opacity .2s}
 .bar.stuck .mini{opacity:1}
 .mini b{font-family:var(--font-num);font-size:15px;color:var(--ink);font-weight:600}
+/* スタイル切り替え（試作用） */
+.styles{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
+.styles::-webkit-scrollbar{display:none}
+.sty{flex:none;display:grid;grid-template-columns:auto auto;align-items:center;gap:2px 8px;font:inherit;text-align:left;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:0;min-height:52px;padding:6px 12px 6px 8px;cursor:pointer}
+.sty[aria-pressed="true"]{border:2px solid var(--ink);padding:5px 11px 5px 7px}
+.sty .sw{grid-row:1 / 3;display:flex}
+.sty .sw i{display:block;width:14px;height:28px}
+.sty b{font-size:13px;line-height:1.2}
+.sty small{font-size:11px;color:var(--muted);line-height:1.2;white-space:nowrap}
 .sync{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 16px}
 .sync::-webkit-scrollbar{display:none}
 .src{flex:none;font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:0;padding:2px 10px;background:var(--surface);white-space:nowrap}
@@ -275,12 +284,13 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <div class="mini">Free to spend <b id="miniFree"></b></div>
   </header>
 
+  <div class="styles" id="styles" aria-label="Font and color style"></div>
   <div class="sync">
     <span class="src sample">Sample</span>
     <span class="src">freee <b>11/20 08:12</b></span>
     <span class="src">Amex <b id="amexSync">11/09</b></span>
     <span class="src">Amazon <b id="amzSync">11/10</b></span>
-    <span class="src">PayPay <b>11/18</b></span>
+    <span class="src">PayPay <b id="ppSync">11/14</b></span>
     <span class="src">Receipts <b id="rcptCount">14</b></span>
   </div>
 
@@ -344,6 +354,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 <div class="menu" id="menu" role="menu" hidden>
   <button type="button" role="menuitem" id="goAmex"><span class="ic">AMEX</span><span><b>Import Amex</b><small>From a payment screenshot</small></span></button>
   <button type="button" role="menuitem" id="goAmz"><span class="ic">AMZN</span><span><b>Import Amazon</b><small>From an order history screenshot</small></span></button>
+  <button type="button" role="menuitem" id="goPP"><span class="ic">PAY</span><span><b>Import PayPay</b><small>From a transfer history screenshot</small></span></button>
   <button type="button" role="menuitem" id="goRcpt"><span class="ic">RCPT</span><span><b>Add a receipt</b><small>Take a photo or pick from library</small></span></button>
   <button type="button" role="menuitem" id="goBack"><span class="ic">¥</span><span><b>Log a payback</b><small>Cash or PayPay you got back</small></span></button>
 </div>
@@ -373,6 +384,31 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Cancel</button>
       <button class="btn" type="button" id="rcptSave">Save receipt</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="ppSheet" role="dialog" aria-modal="true" aria-labelledby="ppTitle" hidden>
+  <div class="grip"></div>
+  <h3 id="ppTitle">Import PayPay</h3>
+  <p class="lead">Share screenshots of PayPay's transaction history. Money you received is logged as paybacks against your card charges.</p>
+  <div id="ppPick" style="display:grid;gap:8px">
+    <label class="drop" for="ppFile">
+      <input type="file" id="ppFile" accept="image/*" multiple>
+      <b>Choose screenshots</b>
+      <small>Received transfers are read. Payments you made are skipped.</small>
+    </label>
+    <button class="linkbtn" type="button" id="ppSample">Try with a sample screenshot</button>
+  </div>
+  <div class="reading" id="ppReading" hidden><span id="ppReadingText">Reading…</span><div class="track"><i></i></div></div>
+  <div id="ppReview" hidden style="display:none;gap:12px">
+    <div class="shots" id="ppShots"></div>
+    <div id="ppRows" style="display:grid;gap:12px"></div>
+    <div class="sumline"><span id="ppCount"></span><b id="ppTotal"></b></div>
+    <p class="lead" style="margin:0">Prototype: reading is simulated with sample transfers.</p>
+    <div class="actions">
+      <button class="btn ghost" type="button" data-close>Cancel</button>
+      <button class="btn" type="button" id="ppAdd">Log paybacks</button>
     </div>
   </div>
 </div>
@@ -430,7 +466,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
   <div class="grip"></div>
   <h3 id="sheetTitle">Log a payback</h3>
-  <p class="lead">PayPay syncs from the spreadsheet. Use this for cash, or to add PayPay by hand.</p>
+  <p class="lead">PayPay comes in from screenshots (Import PayPay). Use this for cash, or to add PayPay by hand.</p>
   <form id="addForm" novalidate>
     <label class="field">Amount
       <input class="amt-in" type="number" id="fAmt" inputmode="numeric" min="1" step="1" placeholder="¥0">
@@ -504,6 +540,13 @@ let TX = [
 const RCPT_SAMPLE = {store:"DON QUIJOTE", d:"11/03", total:3210, pay:"Card ••4021",
   items:[["Shampoo refill","Household",1280],["Snacks & drinks","Food",860],["Phone stand","Gadgets",1070]]};
 // Amazon注文履歴スクショから読み取った想定（試作では固定）
+// PayPay取引履歴スクショから読み取った想定（試作では固定）。dir: in=受け取り / out=支払い
+const PP_SAMPLE = [
+  {d:"11/20", who:"Sato",  amt:3200, dir:"in",  msg:"Yakiniku"},
+  {d:"11/16", who:"Ken",   amt:1225, dir:"in",  msg:"Uber Eats"},
+  {d:"11/14", who:"Tanaka",amt:3200, dir:"in",  msg:"Gyukaku"},
+  {d:"11/12", who:"FamilyMart", amt:540, dir:"out", msg:""},
+];
 const AMZ_SAMPLE = [
   {no:"249-1180", d:"11/21", total:2180, items:[["Kitchen paper ×6","Household",2180]]},
   {no:"249-0937", d:"11/19", total:4280, items:[["Laundry detergent refill ×2","Household",1280],["USB-C cable 2m","Gadgets",3000]]},
@@ -518,9 +561,9 @@ const AMEX_SAMPLE = [
   {d:"11/09", m:"MUJI GINZA", amt:3490, cat:"Household", st:"dup"},
 ];
 
-// via: app=アプリから手入力 / sheet=PayPayスプシから取り込み
+// via: app=アプリから手入力 / shot=PayPay履歴スクショから取り込み
 let BACKS = [
-  {id:"b1", tx:"t07", who:"Tanaka", amt:3200, method:"paypay", status:"in",   date:"11/14", via:"sheet"},
+  {id:"b1", tx:"t07", who:"Tanaka", amt:3200, method:"paypay", status:"in",   date:"11/14", via:"shot"},
   {id:"b2", tx:"t07", who:"Sato", amt:3200, method:"cash",   status:"wait", date:"",      via:"app"},
   {id:"b3", tx:"t11", who:"Mika",   amt:1100, method:"cash",   status:"in",   date:"11/06", via:"app"},
 ];
@@ -583,7 +626,7 @@ function render(){
   const shown = showAllBacks ? order : order.slice(0,3);
   $("backs").innerHTML = shown.length ? shown.map(b=>{
     const t = txById(b.tx);
-    const mtag = b.method==="cash" ? `<span class="tag">Cash</span>` : `<span class="tag">PayPay${b.via==="sheet"?" · sheet":""}</span>`;
+    const mtag = b.method==="cash" ? `<span class="tag">Cash</span>` : `<span class="tag">PayPay${b.via==="shot"?" · screenshot":""}</span>`;
     return `<li class="${b.status==="wait"?"pending":""}">
       <span class="who">${b.who} ${mtag}</span>
       <span class="link">${short(t.card)} · ${t.d} ${t.m}</span>
@@ -670,7 +713,7 @@ function updatePreview(){
     : `${t.m} net <b class="num">${yen(t.amt-received(t))}</b> → <b class="num">${yen(t.amt-received(t)-a)}</b>`;
 }
 function closeAll(){
-  ["sheet","amexSheet","amzSheet","rcptSheet","scrim","menu"].forEach(id=>$(id).hidden=true);
+  ["sheet","amexSheet","amzSheet","ppSheet","rcptSheet","scrim","menu"].forEach(id=>$(id).hidden=true);
   $("openForm").hidden=false; $("openForm").setAttribute("aria-expanded","false");
   document.body.style.overflow="";
 }
@@ -696,6 +739,79 @@ $("openForm").addEventListener("click", ()=>toggleMenu($("menu").hidden));
 $("goBack").addEventListener("click", ()=>openSheet(true));
 $("goAmex").addEventListener("click", ()=>openAmex());
 $("goAmz").addEventListener("click", ()=>openAmz());
+$("goPP").addEventListener("click", ()=>openPP());
+
+// PayPay取り込み：履歴スクショ → 受け取りを読む → 回収待ちと照合 or 新規の割り勘としてカード明細にひもづけ
+let ppRows = [], ppShots = [];
+function ppStep(step){
+  $("ppPick").style.display = step==="pick" ? "grid" : "none";
+  $("ppReading").hidden = step!=="reading";
+  $("ppReview").hidden = step!=="review"; $("ppReview").style.display = step==="review" ? "grid" : "none";
+}
+function openPP(){
+  $("menu").hidden = true; $("ppSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true;
+  document.body.style.overflow = "hidden"; ppStep("pick"); $("ppFile").value = "";
+}
+function guessTx(r){
+  const words = r.msg.toUpperCase().split(/\s+/).filter(w=>w.length>2);
+  const byMsg = TX.find(t=>words.some(w=>t.m.replace(/[^A-Z]/g,"").includes(w.replace(/[^A-Z]/g,""))));
+  return (byMsg || TX.find(t=>t.amt > r.amt) || TX[0]).id;
+}
+function readPP(shots){
+  ppShots = shots; ppStep("reading");
+  $("ppReadingText").textContent = `Reading ${shots.length} screenshot${shots.length>1?"s":""}…`;
+  setTimeout(()=>{
+    ppRows = PP_SAMPLE.map((r,i)=>{
+      if (r.dir==="out") return {...r, i, st:"out", on:false};
+      if (BACKS.some(b=>b.who===r.who && b.amt===r.amt && b.status==="in" && b.method==="paypay")) return {...r, i, st:"dup", on:false};
+      const wait = BACKS.find(b=>b.who===r.who && b.amt===r.amt && b.status==="wait");
+      if (wait) return {...r, i, st:"settle", back:wait, on:true};
+      return {...r, i, st:"new", tx:guessTx(r), on:true};
+    });
+    renderPP(); ppStep("review");
+  }, 1100);
+}
+function renderPP(){
+  $("ppShots").innerHTML = ppShots.map(s=>`<div class="shot" style="${s.url?`background-image:url(${s.url})`:""}">${s.url?"":s.name}</div>`).join("");
+  const why = {dup:"Already logged · skipped", out:"Payment you made · not a payback"};
+  $("ppRows").innerHTML = ppRows.map(r=>{
+    const t = r.back ? txById(r.back.tx) : null;
+    const body = r.st==="settle" ? `<div class="mt">Settles pending payback · <b>${short(t.card)} · ${t.d} ${t.m}</b></div>`
+      : r.st==="new" ? `<div class="mt">${r.msg?`“${r.msg}” · `:""}Pick the charge it splits</div>
+          <select data-ptx="${r.i}" aria-label="Charge for ${r.who}" style="font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:0;min-height:40px;padding:0 8px;min-width:0">
+          ${TX.map(x=>`<option value="${x.id}" ${x.id===r.tx?"selected":""}>${short(x.card)} · ${x.d} ${x.m} ${yen(x.amt)}</option>`).join("")}</select>`
+      : `<div class="mt">${why[r.st]}</div>`;
+    return `<div class="order ${r.on?"on":""} ${r.st==="dup"||r.st==="out"?"skip":""}">
+      <div class="oh"><input type="checkbox" data-pp="${r.i}" ${r.on?"checked":""} ${r.st==="dup"||r.st==="out"?"disabled":""} aria-label="Log ${r.who}">
+        <span class="t">${r.dir==="in"?"From":"To"} ${r.who} · <span class="num">${r.d}</span></span><span class="num">${r.dir==="in"?"+":"−"}${yen(r.amt)}</span></div>
+      ${body}</div>`;
+  }).join("");
+  const pick = ppRows.filter(r=>r.on);
+  $("ppCount").textContent = `${pick.length} of ${ppRows.length} rows selected`;
+  $("ppTotal").textContent = yen(pick.reduce((a,r)=>a+r.amt,0));
+  $("ppAdd").disabled = !pick.length;
+  $("ppAdd").textContent = pick.length ? `Log ${pick.length} payback${pick.length>1?"s":""}` : "Nothing to log";
+}
+$("ppFile").addEventListener("change", e=>{
+  const files = [...e.target.files]; if (!files.length) return;
+  readPP(files.map(f=>({name:f.name, url:URL.createObjectURL(f)})));
+});
+$("ppSample").addEventListener("click", ()=>readPP([{name:"IMG_2063"}]));
+$("ppRows").addEventListener("change", e=>{
+  const a = e.target.dataset;
+  if (a.pp!==undefined){ ppRows[+a.pp].on = e.target.checked; renderPP(); }
+  if (a.ptx!==undefined){ ppRows[+a.ptx].tx = e.target.value; }
+});
+$("ppAdd").addEventListener("click", ()=>{
+  const pick = ppRows.filter(r=>r.on);
+  pick.forEach(r=>{
+    if (r.st==="settle"){ Object.assign(r.back, {status:"in", method:"paypay", date:r.d, via:"shot"}); }
+    else BACKS.push({id:"b"+Date.now()+r.i, tx:r.tx, who:r.who, amt:r.amt, method:"paypay", status:"in", date:r.d, via:"shot"});
+  });
+  $("ppSync").textContent = "just now";
+  closeAll(); render();
+  toast(`Logged ${pick.length} PayPay payback${pick.length>1?"s":""} · ${yen(pick.reduce((a,r)=>a+r.amt,0))}`);
+});
 
 // Amazon取り込み：注文履歴スクショ → 注文と品目を読む → カードのAMAZON明細と合計額で突合 → 品目で分割
 let amzOrders = [], amzShots = [];
@@ -898,5 +1014,42 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeAll(); });
 addEventListener("scroll", ()=>$("bar").classList.toggle("stuck", scrollY > 140), {passive:true});
+// フォント×カラーの組み合わせ（各2色）。#style-<id> で直接開ける
+const STYLES = {
+  ledger:   {name:"Ledger",    font:"Plex Sans / Plex Mono",   sans:'"IBM Plex Sans"', num:'"IBM Plex Mono"',
+             light:["#121a16","#0e6b57","#ffffff"], dark:["#e6ede9","#52c3a3","#0e1411"]},
+  cobalt:   {name:"Cobalt",    font:"Space Grotesk / JetBrains Mono", sans:'"Space Grotesk"', num:'"JetBrains Mono"',
+             light:["#141826","#2f45c8","#ffffff"], dark:["#e7e9f2","#8d9cff","#0f121c"]},
+  persimmon:{name:"Persimmon", font:"DM Sans / DM Mono",       sans:'"DM Sans"', num:'"DM Mono"',
+             light:["#1e1916","#b23c0a","#ffffff"], dark:["#f1ebe7","#f0915e","#171210"]},
+  receipt:  {name:"Receipt",   font:"Work Sans / Space Mono",  sans:'"Work Sans"', num:'"Space Mono"',
+             light:["#1a1a1a","#7a5c00","#fbfbf8"], dark:["#ececea","#e0b84a","#141414"]},
+  shu:      {name:"Shu",       font:"Zen Kaku Gothic / Roboto Mono", sans:'"Zen Kaku Gothic New"', num:'"Roboto Mono"',
+             light:["#1c1c1f","#c0182c","#ffffff"], dark:["#ececef","#ff7282","#141417"]},
+};
+let styleId = "ledger";
+try { styleId = localStorage.getItem("mf-style") || styleId; } catch(e){}
+const fromHash = location.hash.replace("#style-","");
+if (STYLES[fromHash]) styleId = fromHash;
+const isDark = () => { const t = document.documentElement.dataset.theme; return t ? t==="dark" : matchMedia("(prefers-color-scheme: dark)").matches; };
+function applyStyle(){
+  const st = STYLES[styleId], [ink, accent, paper] = st[isDark() ? "dark" : "light"], r = document.documentElement.style;
+  r.setProperty("--ink", ink); r.setProperty("--accent", accent); r.setProperty("--paper", paper);
+  r.setProperty("--font-jp", `${st.sans}, "Zen Kaku Gothic New", system-ui, -apple-system, "Hiragino Sans", sans-serif`);
+  r.setProperty("--font-num", `${st.num}, ui-monospace, SFMono-Regular, Menlo, monospace`);
+  $("styles").innerHTML = Object.entries(STYLES).map(([id,x])=>{ const c = x[isDark()?"dark":"light"];
+    return `<button class="sty" type="button" data-style="${id}" aria-pressed="${id===styleId}">
+      <span class="sw"><i style="background:${c[0]}"></i><i style="background:${c[1]}"></i></span>
+      <b style="font-family:${x.sans.replace(/"/g,"'")},sans-serif">${x.name}</b><small>${x.font}</small></button>`; }).join("");
+}
+$("styles").addEventListener("click", e=>{
+  const b = e.target.closest("[data-style]"); if (!b) return;
+  styleId = b.dataset.style; applyStyle();
+  try { localStorage.setItem("mf-style", styleId); } catch(e){}
+  try { history.replaceState(null, "", "#style-"+styleId); } catch(e){}
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyStyle);
+new MutationObserver(applyStyle).observe(document.documentElement, {attributes:true, attributeFilter:["data-theme"]});
+applyStyle();
 render();
 </script>
