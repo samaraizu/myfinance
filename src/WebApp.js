@@ -1,0 +1,85 @@
+/**
+ * スマホ入力用ウェブアプリ。アクセスはデプロイした本人のみ（appsscript.json の webapp.access = MYSELF）。
+ */
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('レシート記録')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
+    .addMetaTag('apple-mobile-web-app-capable', 'yes')
+    .addMetaTag('mobile-web-app-capable', 'yes');
+}
+
+/** 当月合計など、画面初期表示用のサマリー。 */
+function getSummary() {
+  // 初回は【POS】シート作成・移行が走るので、自動処理と同時に走らないようロックを取る
+  const lock = LockService.getScriptLock();
+  const locked = lock.tryLock(60 * 1000);
+  try {
+    const ss = openSpreadsheet_();
+    return { monthTotal: getMonthTotal_(ss), spreadsheetUrl: ss.getUrl() };
+  } finally {
+    if (locked) lock.releaseLock();
+  }
+}
+
+/**
+ * 画像を受け取って receipts_inbox に保存し、その場で読み取りまで実行する。
+ * @param {string} base64 画像データ（data URL の接頭辞なし）
+ * @param {string} mimeType
+ * @param {number=} takenAt 写真の撮影・更新日時（ms）。購入日が読めないときの代わりに使う
+ */
+function uploadReceipt(base64, mimeType, takenAt) {
+  if (!CONFIG.SUPPORTED_MIME.includes(mimeType)) {
+    throw new Error(`未対応の形式です: ${mimeType}`);
+  }
+  const name = `receipt_${Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss')}`;
+  const blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, name);
+  // 後でトリガーが処理する場合にも写真の日付を使えるよう、説明欄に残す
+  const description = takenAt ? `takenAt:${new Date(takenAt).toISOString()}` : '';
+  const inbox = DriveApp.getFolderById(getProp_(PROP.INBOX_ID, true));
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(60 * 1000)) {
+    // 自動処理が走っている。保存だけして後続のトリガーに任せる
+    inbox.createFile(blob).setDescription(description);
+    return { status: 'queued', monthTotal: getMonthTotal_(openSpreadsheet_()) };
+  }
+  try {
+    const file = inbox.createFile(blob).setDescription(description);
+    const ss = openSpreadsheet_();
+    let receipt;
+    try {
+      receipt = processFile_(ss, file, getCategories_(ss), takenAt ? new Date(takenAt) : null);
+    } catch (e) {
+      if (e && e.transient) return { status: 'queued', reason: 'busy', monthTotal: getMonthTotal_(ss) };
+      return { status: 'error', message: e && e.message ? e.message : String(e), monthTotal: getMonthTotal_(ss) };
+    }
+    if (receipt.duplicate) {
+      return {
+        status: 'duplicate',
+        receipt: { date: receipt.date, store: receipt.store, total: receipt.total },
+        monthTotal: getMonthTotal_(ss),
+      };
+    }
+    SpreadsheetApp.flush();
+    return {
+      status: 'ok',
+      receipt: {
+        date: receipt.date,
+        dateGuessed: !!receipt.dateGuessed,
+        store: receipt.store,
+        total: receipt.total,
+        tax: receipt.tax,
+        itemsSum: receipt.itemsSum,
+        diff: receipt.diff,
+        ok: receipt.ok,
+        items: receipt.items.map((it) => ({
+          name: it.name, category: it.category, quantity: it.quantity, amount: it.amount, discount: it.discount,
+        })),
+      },
+      monthTotal: getMonthTotal_(ss),
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}

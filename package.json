@@ -1,0 +1,16 @@
+{
+  "name": "myfinance",
+  "version": "1.0.0",
+  "private": true,
+  "description": "レシート撮影 → Gemini読み取り → スプレッドシート記録・可視化（Google Apps Script）",
+  "scripts": {
+    "login": "clasp login",
+    "push": "clasp push -f",
+    "open": "clasp open-script",
+    "deploy": "clasp deploy -d \"web app\"",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.4.1"
+  }
+}

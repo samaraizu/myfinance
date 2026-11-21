@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    :root {
+      --bg: #f6f5f2; --card: #ffffff; --ink: #1d1d1f; --sub: #6e6e73;
+      --accent: #1f6f5c; --warn-bg: #fff4e5; --warn: #9a5b00; --err: #b3261e; --line: #e6e4df;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121212; --card: #1e1e1e; --ink: #f2f2f2; --sub: #a0a0a5;
+        --accent: #5fc7a8; --warn-bg: #3a2c12; --warn: #f2c26b; --err: #ff8a80; --line: #2e2e2e;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+      background: var(--bg); color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      font-size: 15px; line-height: 1.5;
+    }
+    .month { background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 16px; }
+    .month small { color: var(--sub); display: block; }
+    .month strong { font-size: 32px; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+    .pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pick {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      height: 96px; border: 2px dashed var(--line); border-radius: 16px; background: var(--card);
+      color: var(--accent); font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    .pick span { font-size: 26px; line-height: 1; }
+    .preview { display: none; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; margin-top: 12px; }
+    .preview img, .preview div {
+      width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 10px; background: var(--card);
+    }
+    .preview div { display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--sub); padding: 4px; word-break: break-all; }
+    input[type=file] { display: none; }
+    button.send {
+      width: 100%; margin-top: 12px; padding: 16px; border: 0; border-radius: 14px;
+      background: var(--accent); color: #fff; font-size: 17px; font-weight: 600;
+    }
+    button.send:disabled { opacity: .4; }
+    .status { margin: 12px 0; color: var(--sub); min-height: 1.5em; }
+    .status.err { color: var(--err); }
+    .alert { background: var(--warn-bg); color: var(--warn); border-radius: 12px; padding: 12px; margin: 12px 0; }
+    .result { background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+    .result h2 { font-size: 17px; margin: 0; }
+    .result .meta { color: var(--sub); font-size: 13px; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    td { padding: 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+    td.amt { text-align: right; white-space: nowrap; padding-left: 8px; }
+    td .cat { color: var(--sub); font-size: 12px; }
+    td .disc { color: var(--warn); font-size: 12px; }
+    tfoot td { font-weight: 700; border-bottom: 0; }
+    a { color: var(--accent); }
+    .footer { margin-top: 16px; font-size: 13px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="month">
+    <small id="monthLabel">今月の支出</small>
+    <strong id="monthTotal">—</strong>
+  </div>
+
+  <div class="pickers">
+    <label class="pick"><span>📷</span>撮影する
+      <input type="file" id="camera" accept="image/*" capture="environment">
+    </label>
+    <label class="pick"><span>🖼️</span>写真から選ぶ
+      <input type="file" id="library" accept="image/*,application/pdf" multiple>
+    </label>
+  </div>
+  <div class="preview" id="preview"></div>
+  <button class="send" id="send" disabled>送信して読み取る</button>
+
+  <div class="status" id="status"></div>
+  <div id="results"></div>
+  <div class="footer"><a id="sheetLink" href="#" target="_blank" rel="noopener" hidden>スプレッドシートを開く</a></div>
+
+  <script>
+    const MAX_EDGE = 1600;
+    const MAX_BATCH = 20; // 1回にまとめて送れる枚数（無料枠のレート制限と端末メモリを考慮）
+    const yen = (n) => '¥' + Number(n || 0).toLocaleString('ja-JP');
+    const $ = (id) => document.getElementById(id);
+    let queue = [];
+
+    $('monthLabel').textContent = `${new Date().getMonth() + 1}月の支出`;
+
+    function setMonthTotal(n) { $('monthTotal').textContent = yen(n); }
+    function setStatus(text, isError) {
+      $('status').textContent = text;
+      $('status').className = 'status' + (isError ? ' err' : '');
+    }
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    google.script.run
+      .withSuccessHandler((s) => {
+        setMonthTotal(s.monthTotal);
+        $('sheetLink').href = s.spreadsheetUrl;
+        $('sheetLink').hidden = false;
+      })
+      .withFailureHandler((e) => setStatus(e.message, true))
+      .getSummary();
+
+    // 送信量を抑えるため長辺 MAX_EDGE px の JPEG に縮小。読めない形式はそのまま送る
+    function prepare(file) {
+      return new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min(1, MAX_EDGE / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          URL.revokeObjectURL(url);
+          resolve({ name: file.name, takenAt: file.lastModified, preview: dataUrl, base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
+        };
+        img.onerror = () => {
+          const reader = new FileReader();
+          reader.onload = () => resolve({ name: file.name, takenAt: file.lastModified, preview: null, base64: String(reader.result).split(',')[1], mimeType: file.type });
+          reader.readAsDataURL(file);
+        };
+        img.src = url;
+      });
+    }
+
+    async function onPick(e) {
+      let files = Array.from(e.target.files || []);
+      e.target.value = '';
+      if (!files.length) return;
+      const skipped = Math.max(0, files.length - MAX_BATCH);
+      files = files.slice(0, MAX_BATCH);
+      setStatus('画像を準備中…');
+      queue = await Promise.all(files.map(prepare));
+      $('preview').innerHTML = queue.map((q) => q.preview ? `<img src="${q.preview}" alt="">` : `<div>${esc(q.name)}</div>`).join('');
+      $('preview').style.display = 'grid';
+      $('send').disabled = false;
+      $('send').textContent = queue.length > 1 ? `${queue.length}枚を送信して読み取る` : '送信して読み取る';
+      setStatus(skipped ? `1回に送れるのは${MAX_BATCH}枚までです。残り${skipped}枚は次に選び直してください。` : '');
+    }
+    $('camera').addEventListener('change', onPick);
+    $('library').addEventListener('change', onPick);
+
+    function upload(item) {
+      return new Promise((resolve) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler((err) => resolve({ status: 'error', message: err.message }))
+          .uploadReceipt(item.base64, item.mimeType, item.takenAt);
+      });
+    }
+
+    $('send').addEventListener('click', async () => {
+      if (!queue.length) return;
+      const items = queue;
+      queue = [];
+      $('send').disabled = true;
+      $('results').innerHTML = '';
+      const summary = { ok: 0, queued: 0, duplicate: 0, error: 0 };
+      for (let i = 0; i < items.length; i++) {
+        setStatus(items.length > 1 ? `読み取り中… ${i + 1} / ${items.length}` : '読み取り中…（10〜30秒）');
+        const res = await upload(items[i]);
+        if (res.monthTotal != null) setMonthTotal(res.monthTotal);
+        summary[res.status in summary ? res.status : 'error']++;
+        $('results').insertAdjacentHTML('afterbegin', card(res, items[i]));
+      }
+      $('preview').style.display = 'none';
+      $('preview').innerHTML = '';
+      $('send').textContent = '送信して読み取る';
+      setStatus(items.length > 1
+        ? `完了：記録 ${summary.ok}件` + (summary.queued ? `／後で自動記録 ${summary.queued}件` : '') + (summary.duplicate ? `／重複でスキップ ${summary.duplicate}件` : '') + (summary.error ? `／失敗 ${summary.error}件` : '')
+        : summary.ok ? '記録しました' : '', summary.error > 0 && summary.ok + summary.queued + summary.duplicate === 0);
+    });
+
+    function card(res, item) {
+      if (res.status === 'queued') {
+        return `<div class="alert">${esc(item.name)}：${res.reason === 'busy'
+          ? 'Geminiが混雑しているため保存のみ。10分おきの自動処理で記録されます。'
+          : '保存しました。自動処理中のため、数分後に記録されます。'}</div>`;
+      }
+      if (res.status === 'duplicate') {
+        const r = res.receipt || {};
+        return `<div class="alert">${esc(item.name)}：記録済みのレシートと同じため、記録しませんでした${r.store ? `（${esc(r.store)} ${esc(r.date)} ${yen(r.total)}）` : ''}。</div>`;
+      }
+      if (res.status !== 'ok') {
+        return `<div class="alert">${esc(item.name)}：読み取りに失敗しました（${esc(res.message || '不明なエラー')}）</div>`;
+      }
+      const r = res.receipt;
+      const alerts = [];
+      if (!r.ok) alerts.push(`明細合計 ${yen(r.itemsSum)} とレシート合計 ${yen(r.total)} が合いません（差額 ${yen(r.diff)}）。スプレッドシートで確認してください。`);
+      if (r.dateGuessed) alerts.push('購入日が読めなかったため、写真の日付で記録しました。');
+      const rows = r.items.map((it) => `
+        <tr>
+          <td>${esc(it.name)}${it.quantity > 1 ? ` ×${it.quantity}` : ''}<br>
+            <span class="cat">${esc(it.category)}</span>
+            ${it.discount ? `<span class="disc">　値引 -${yen(it.discount)}</span>` : ''}</td>
+          <td class="amt">${yen(it.amount)}</td>
+        </tr>`).join('');
+      return alerts.map((a) => `<div class="alert">${esc(a)}</div>`).join('') + `
+        <div class="result">
+          <h2>${esc(r.store)}</h2>
+          <div class="meta">${esc(r.date)}　${r.items.length}品目${r.tax != null ? `　税 ${yen(r.tax)}` : ''}</div>
+          <table><tbody>${rows}</tbody>
+            <tfoot><tr><td>合計</td><td class="amt">${yen(r.total)}</td></tr></tfoot>
+          </table>
+        </div>`;
+    }
+  </script>
+</body>
+</html>
