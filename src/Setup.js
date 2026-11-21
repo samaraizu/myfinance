@@ -45,7 +45,8 @@ function ensureFolder_(propKey, name) {
 function ensureSheet_(ss, name, headers) {
   let sheet = ss.getSheetByName(name);
   if (!sheet) sheet = ss.insertSheet(name, ss.getNumSheets()); // 既存シートの後ろに追加
-  if (headers && sheet.getLastRow() === 0) {
+  if (headers) {
+    // 列を追加したときも見出しが揃うよう、毎回1行目を書き直す
     sheet.getRange(1, 1, 1, headers.length).setValues([headers])
       .setFontWeight('bold').setBackground('#eeeeee');
     sheet.setFrozenRows(1);

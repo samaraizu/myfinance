@@ -162,20 +162,20 @@
       queue = [];
       $('send').disabled = true;
       $('results').innerHTML = '';
-      const summary = { ok: 0, queued: 0, error: 0 };
+      const summary = { ok: 0, queued: 0, duplicate: 0, error: 0 };
       for (let i = 0; i < items.length; i++) {
         setStatus(items.length > 1 ? `読み取り中… ${i + 1} / ${items.length}` : '読み取り中…（10〜30秒）');
         const res = await upload(items[i]);
         if (res.monthTotal != null) setMonthTotal(res.monthTotal);
-        summary[res.status === 'ok' ? 'ok' : res.status === 'queued' ? 'queued' : 'error']++;
+        summary[res.status in summary ? res.status : 'error']++;
         $('results').insertAdjacentHTML('afterbegin', card(res, items[i]));
       }
       $('preview').style.display = 'none';
       $('preview').innerHTML = '';
       $('send').textContent = '送信して読み取る';
       setStatus(items.length > 1
-        ? `完了：記録 ${summary.ok}件` + (summary.queued ? `／後で自動記録 ${summary.queued}件` : '') + (summary.error ? `／失敗 ${summary.error}件` : '')
-        : summary.ok ? '記録しました' : '', summary.error > 0 && summary.ok === 0 && summary.queued === 0);
+        ? `完了：記録 ${summary.ok}件` + (summary.queued ? `／後で自動記録 ${summary.queued}件` : '') + (summary.duplicate ? `／重複でスキップ ${summary.duplicate}件` : '') + (summary.error ? `／失敗 ${summary.error}件` : '')
+        : summary.ok ? '記録しました' : '', summary.error > 0 && summary.ok + summary.queued + summary.duplicate === 0);
     });
 
     function card(res, item) {
@@ -183,6 +183,10 @@
         return `<div class="alert">${esc(item.name)}：${res.reason === 'busy'
           ? 'Geminiが混雑しているため保存のみ。10分おきの自動処理で記録されます。'
           : '保存しました。自動処理中のため、数分後に記録されます。'}</div>`;
+      }
+      if (res.status === 'duplicate') {
+        const r = res.receipt || {};
+        return `<div class="alert">${esc(item.name)}：記録済みのレシートと同じため、記録しませんでした${r.store ? `（${esc(r.store)} ${esc(r.date)} ${yen(r.total)}）` : ''}。</div>`;
       }
       if (res.status !== 'ok') {
         return `<div class="alert">${esc(item.name)}：読み取りに失敗しました（${esc(res.message || '不明なエラー')}）</div>`;

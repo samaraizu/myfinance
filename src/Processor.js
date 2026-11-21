@@ -55,7 +55,12 @@ function processFile_(ss, file, categories, fallbackDate) {
       receipt.date = Utilities.formatDate(fallbackDate || file.getDateCreated(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
       receipt.dateGuessed = true;
     }
+    const duplicateOf = findDuplicateReceipt_(ss, receipt);
     file.moveTo(DriveApp.getFolderById(getProp_(PROP.DONE_ID, true)));
+    if (duplicateOf) {
+      log_('WARN', file, `記録済みのレシートと同じため記録せず（既存ID: ${duplicateOf}）: ${receipt.store} ${receipt.date} ¥${receipt.total}`);
+      return Object.assign(receipt, { duplicate: true, duplicateOf });
+    }
     saveReceipt_(ss, fileId, file.getUrl(), receipt);
     log_(receipt.ok ? 'INFO' : 'WARN', file,
       `${receipt.store} ¥${receipt.total} / ${receipt.items.length}品目` +

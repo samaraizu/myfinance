@@ -61,7 +61,24 @@ function saveReceipt_(ss, fileId, fileUrl, receipt) {
   receipts.appendRow([
     fileId, date, receipt.store, receipt.total, receipt.tax === null ? '' : receipt.tax,
     receipt.itemsSum, receipt.diff, receipt.ok ? 'OK' : '要確認', toSheetDateTime_(new Date()), fileUrl,
+    receipt.time ? `'${receipt.time}` : '', // 先頭の ' で文字列として保存（時刻値に変換させない）
   ]);
+}
+
+/** 記録済みのレシートに同じものがあればそのIDを返す。 */
+function findDuplicateReceipt_(ss, receipt) {
+  const sheet = getSheet_(ss, SHEET.RECEIPTS);
+  const last = sheet.getLastRow();
+  if (last < 2) return null;
+  const tz = ss.getSpreadsheetTimeZone();
+  const rows = sheet.getRange(2, 1, last - 1, HEADERS.RECEIPTS.length).getValues();
+  const hit = rows.find((r) => isSameReceipt_(receipt, {
+    date: r[1] instanceof Date ? Utilities.formatDate(r[1], tz, 'yyyy-MM-dd') : String(r[1]).replace(/\//g, '-'),
+    store: r[2],
+    total: r[3],
+    time: normalizeTime_(r[10]),
+  }));
+  return hit ? hit[0] : null;
 }
 
 /** 当月の支出合計（レシート合計ベース＝実際の支払額）。 */

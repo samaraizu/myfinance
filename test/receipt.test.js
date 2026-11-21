@@ -94,3 +94,26 @@ test('リトライ対象ステータスの判定', () => {
   for (const c of [429, 500, 502, 503, 504]) assert.equal(isRetryable(c), true, String(c));
   for (const c of [400, 401, 403, 404]) assert.equal(isRetryable(c), false, String(c));
 });
+
+test('時刻の正規化', () => {
+  const normalizeTime = g('normalizeTime_');
+  assert.equal(normalizeTime('9:05'), '09:05');
+  assert.equal(normalizeTime('21時30分'), '21:30');
+  assert.equal(normalizeTime('25:00'), null);
+  assert.equal(normalizeTime(null), null);
+});
+
+test('同一レシート判定', () => {
+  const same = g('isSameReceipt_');
+  const base = { date: '2026-11-14', store: 'maruetsu 目黒店', total: 5702, time: null };
+  // 撮り直し：店舗表記の空白・全角ゆれは吸収
+  assert.equal(same(base, { ...base, store: 'ｍａｒｕｅｔｓｕ　目黒店' }), true);
+  // 金額・日付が違えば別物
+  assert.equal(same(base, { ...base, total: 5703 }), false);
+  assert.equal(same(base, { ...base, date: '2026-11-15' }), false);
+  // 時刻が両方あれば時刻で判定：同じ店・同じ金額でも時刻が違えば別の買い物
+  assert.equal(same({ ...base, time: '10:00' }, { ...base, time: '18:30' }), false);
+  assert.equal(same({ ...base, time: '10:00' }, { ...base, store: 'マルエツ目黒店', time: '10:00' }), true);
+  // 片方に時刻がなければ店舗で判定
+  assert.equal(same({ ...base, time: '10:00' }, { ...base, store: '別の店' }), false);
+});

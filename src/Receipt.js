@@ -9,6 +9,7 @@ function buildPrompt_(categories) {
     '',
     'ルール:',
     '- purchase_date は YYYY-MM-DD 形式。和暦や2桁年は西暦に直す。読めなければ null。',
+    '- purchase_time は購入時刻を24時間表記の HH:MM で。読めなければ null。',
     '- store_name は店舗名（チェーン名＋支店名があれば両方）。',
     '- items には商品行のみを入れる。小計・合計・税・お預り・お釣り・ポイント・支払方法の行は含めない。',
     '- name_raw はレシートの表記そのまま。name_normalized は一般的な日本語の商品名に直す（例: ギュウコマ → 牛こま切れ肉、Gオレンジ100 → オレンジジュース）。',
@@ -26,6 +27,7 @@ function buildResponseSchema_(categories) {
     type: 'OBJECT',
     properties: {
       purchase_date: { type: 'STRING', nullable: true },
+      purchase_time: { type: 'STRING', nullable: true },
       store_name: { type: 'STRING', nullable: true },
       items: {
         type: 'ARRAY',
@@ -97,6 +99,28 @@ function normalizeDate_(value) {
   return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
+function normalizeTime_(value) {
+  const m = String(value || '').match(/(\d{1,2})[:：時](\d{2})/);
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
+  return `${m[1].padStart(2, '0')}:${m[2]}`;
+}
+
+/** 店舗名の表記ゆれ（全角半角・大小文字・空白）を吸収した比較用キー。 */
+function storeKey_(store) {
+  return String(store || '').normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+}
+
+/**
+ * 同じレシートか。日付と合計が一致し、さらに
+ * 両方に時刻があれば時刻、どちらかになければ店舗名が一致すれば同一とみなす。
+ * 同じ店で同じ金額の買い物を1日に2回しても、時刻が読めていれば別物として扱える。
+ */
+function isSameReceipt_(a, b) {
+  if (a.date !== b.date || Number(a.total) !== Number(b.total)) return false;
+  if (a.time && b.time) return a.time === b.time;
+  return storeKey_(a.store) === storeKey_(b.store);
+}
+
 /** Gemini の生データを検証・整形し、明細合計チェックまで済ませる。 */
 function normalizeReceipt_(raw, categories, tolerance) {
   const allowed = new Set(categories);
@@ -127,6 +151,7 @@ function normalizeReceipt_(raw, categories, tolerance) {
 
   return {
     date: normalizeDate_(raw.purchase_date),
+    time: normalizeTime_(raw.purchase_time),
     store: String(raw.store_name || '').trim() || '不明',
     total,
     tax,

@@ -54,6 +54,13 @@ function uploadReceipt(base64, mimeType, takenAt) {
       if (e && e.transient) return { status: 'queued', reason: 'busy', monthTotal: getMonthTotal_(ss) };
       return { status: 'error', message: e && e.message ? e.message : String(e), monthTotal: getMonthTotal_(ss) };
     }
+    if (receipt.duplicate) {
+      return {
+        status: 'duplicate',
+        receipt: { date: receipt.date, store: receipt.store, total: receipt.total },
+        monthTotal: getMonthTotal_(ss),
+      };
+    }
     SpreadsheetApp.flush();
     return {
       status: 'ok',
