@@ -27,6 +27,7 @@
 :root[data-theme="dark"]{--ink:#E6EDE9; --accent:#52C3A3; --paper:#0E1411; color-scheme:dark}
 
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{background:var(--bg);color:var(--ink);font-family:var(--font-jp);font-size:15px;line-height:1.6;-webkit-tap-highlight-color:transparent}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 .num{font-family:var(--font-num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
@@ -144,6 +145,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .tag{font-size:10px;font-family:var(--font-num);border-radius:0;padding:0 5px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .tag.card{background:var(--bg)}
 .tag.amz{border-color:var(--plan);color:var(--plan)}
+.tag.amx{border-color:var(--ink);color:var(--ink)}
 .tag.rcp{border-color:var(--accent);color:var(--accent)}
 .st{font-size:10px;font-weight:700;border-radius:0;padding:0 5px;white-space:nowrap}
 .st.ok{background:var(--accent-soft);color:var(--ok)}
@@ -159,9 +161,54 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .empty{color:var(--muted);font-size:13px;padding:16px 0;display:block!important}
 
 /* 右下ボタン */
-.fab{position:fixed;z-index:6;bottom:calc(16px + env(safe-area-inset-bottom,0px));right:max(calc(16px + env(safe-area-inset-right,0px)),calc((100vw - var(--col)) / 2 + 16px));
-  display:flex;align-items:center;gap:6px;font:inherit;font-size:15px;font-weight:700;min-height:56px;padding:0 20px;border-radius:0;border:0;background:var(--back);color:var(--surface);cursor:pointer}
-.fab span{font-size:22px;line-height:1;font-weight:400}
+.fab{position:fixed;z-index:23;bottom:calc(16px + env(safe-area-inset-bottom,0px));right:max(calc(16px + env(safe-area-inset-right,0px)),calc((100vw - var(--col)) / 2 + 16px));
+  display:grid;place-items:center;width:60px;height:60px;font:inherit;font-size:32px;font-weight:300;line-height:1;padding:0;border-radius:0;border:0;background:var(--back);color:var(--surface);cursor:pointer;transition:transform .2s}
+.fab[aria-expanded="true"]{transform:rotate(45deg);background:var(--ink)}
+/* ＋で開く選択メニュー */
+.menu{position:fixed;z-index:22;bottom:calc(84px + env(safe-area-inset-bottom,0px));right:max(calc(16px + env(safe-area-inset-right,0px)),calc((100vw - var(--col)) / 2 + 16px));
+  display:grid;gap:0;width:min(280px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--ink);animation:up .16s ease}
+.menu button{display:grid;grid-template-columns:40px minmax(0,1fr);align-items:center;gap:12px;text-align:left;font:inherit;color:var(--ink);background:none;border:0;border-top:1px solid var(--line);min-height:64px;padding:8px 14px;cursor:pointer}
+.menu button:first-child{border-top:0}
+.menu button:active{background:var(--accent-soft)}
+.menu .ic{display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--accent);color:var(--accent);font-family:var(--font-num);font-size:11px;font-weight:600}
+.menu b{display:block;font-size:15px}
+.menu small{display:block;font-size:12px;color:var(--muted)}
+/* レシート登録 */
+.pick2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pick2 label{display:grid;place-items:center;align-content:center;gap:6px;min-height:130px;border:1px solid var(--accent);color:var(--ink);cursor:pointer;text-align:center;padding:12px}
+.pick2 label:first-child{background:var(--accent);color:var(--paper)}
+.pick2 .ic2{font-size:26px;line-height:1}
+.pick2 b{font-size:15px}
+.pick2 input{position:absolute;width:1px;height:1px;opacity:0}
+.rcpt{display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;align-items:start}
+.rcpt .shot{width:72px;height:120px}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 12px;font-size:13px;margin:0}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;font-weight:500;overflow-wrap:anywhere}
+.matchbox{border:1px solid var(--accent);background:var(--accent-soft);padding:10px 12px;font-size:13px;display:grid;gap:2px}
+.matchbox small{color:var(--muted);font-size:11px;letter-spacing:.06em}
+/* Amex取り込み */
+.drop{display:grid;place-items:center;gap:6px;text-align:center;min-height:170px;padding:20px;border:1px dashed var(--accent);background:var(--accent-soft);cursor:pointer;color:var(--ink)}
+.drop b{font-size:15px}
+.drop small{font-size:12px;color:var(--muted)}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.linkbtn{font:inherit;font-size:13px;color:var(--accent);background:none;border:0;padding:6px 0;cursor:pointer;text-decoration:underline;text-underline-offset:3px;justify-self:center}
+.reading{display:grid;gap:8px;padding:28px 0;text-align:center;font-size:14px}
+.reading .track{height:4px;background:var(--line);overflow:hidden}
+.reading .track i{display:block;height:100%;width:40%;background:var(--accent);animation:slide 1s linear infinite}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+.shots{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.shot{flex:none;width:56px;height:96px;border:1px solid var(--line);background:var(--bg) center/cover no-repeat;display:grid;place-items:end center;font-family:var(--font-num);font-size:9px;color:var(--muted);padding:2px}
+.rows{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.rows li{display:grid;grid-template-columns:auto 2.9em minmax(0,1fr) auto;align-items:center;gap:4px 10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.rows li.skip{color:var(--muted)}
+.rows input[type=checkbox]{width:22px;height:22px;accent-color:var(--accent);margin:0}
+.rows .m{font-weight:500;overflow-wrap:anywhere;line-height:1.35}
+.rows .amt{text-align:right;font-weight:500}
+.rows select{grid-column:3 / 5;font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:0;min-height:34px;padding:0 8px;min-width:0}
+.rows .why{grid-column:3 / 5;font-size:11px}
+.sumline{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+.sumline b{color:var(--ink);font-family:var(--font-num);font-weight:600}
 
 /* ボトムシート */
 .scrim{position:fixed;inset:0;z-index:20;background:var(--scrim)}
@@ -202,7 +249,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .legend .l-free{border-top-style:dashed}
 .free.neg{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:6px}
 .wish.on{border-color:var(--accent)}
-.fab,.toast{border:1px solid var(--ink)}
+.toast{border:1px solid var(--ink)}
 .toast{background:var(--ink);color:var(--paper)}
 @media (max-width:360px){.free{font-size:34px}.legend .num{font-size:12px}}
 @media (prefers-reduced-motion:reduce){.meter .seg,.sheet{transition:none;animation:none}}
@@ -217,9 +264,10 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   <div class="sync">
     <span class="src sample">Sample</span>
     <span class="src">freee <b>11/20 08:12</b></span>
+    <span class="src">Amex <b id="amexSync">11/09</b></span>
     <span class="src">Amazon <b>11/19</b></span>
     <span class="src">PayPay <b>11/18</b></span>
-    <span class="src">Receipts <b>14</b></span>
+    <span class="src">Receipts <b id="rcptCount">14</b></span>
   </div>
 
   <section class="card" aria-label="Budget">
@@ -266,7 +314,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   </section>
 
   <section class="card" aria-label="Charges" id="txCard">
-    <h2>Card charges <span>freee × Amazon × receipts</span></h2>
+    <h2>Card charges <span>freee · Amex · Amazon · receipts</span></h2>
     <div class="match">
       <span>Receipt match <b id="mOk"></b></span>
       <span>Itemized <b id="mSplit"></b></span>
@@ -279,9 +327,66 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   </section>
 </div>
 
-<button class="fab" type="button" id="openForm"><span>＋</span>Got paid back</button>
+<div class="menu" id="menu" role="menu" hidden>
+  <button type="button" role="menuitem" id="goAmex"><span class="ic">AMEX</span><span><b>Import Amex</b><small>From a payment screenshot</small></span></button>
+  <button type="button" role="menuitem" id="goRcpt"><span class="ic">RCPT</span><span><b>Add a receipt</b><small>Take a photo or pick from library</small></span></button>
+  <button type="button" role="menuitem" id="goBack"><span class="ic">¥</span><span><b>Log a payback</b><small>Cash or PayPay you got back</small></span></button>
+</div>
+<button class="fab" type="button" id="openForm" aria-label="Add" aria-haspopup="menu" aria-expanded="false" aria-controls="menu">＋</button>
 
 <div class="scrim" id="scrim" hidden></div>
+<div class="sheet" id="rcptSheet" role="dialog" aria-modal="true" aria-labelledby="rcptTitle" hidden>
+  <div class="grip"></div>
+  <h3 id="rcptTitle">Add a receipt</h3>
+  <p class="lead">The receipt is matched to a card charge, and its items fill in the categories.</p>
+  <div id="rcptPick" style="display:grid;gap:8px">
+    <div class="pick2">
+      <label for="rcptCam"><input type="file" id="rcptCam" accept="image/*" capture="environment"><span class="ic2">◉</span><b>Take photo</b></label>
+      <label for="rcptLib"><input type="file" id="rcptLib" accept="image/*" multiple><span class="ic2">▦</span><b>From library</b></label>
+    </div>
+    <button class="linkbtn" type="button" id="rcptSample">Try with a sample receipt</button>
+  </div>
+  <div class="reading" id="rcptReading" hidden><span id="rcptReadingText">Reading receipt…</span><div class="track"><i></i></div></div>
+  <div id="rcptReview" hidden style="display:none;gap:12px">
+    <div class="rcpt">
+      <div class="shot" id="rcptShot"></div>
+      <dl class="kv" id="rcptKv"></dl>
+    </div>
+    <div class="matchbox" id="rcptMatch"></div>
+    <ul class="rows" id="rcptRows"></ul>
+    <p class="lead" style="margin:0">Prototype: reading is simulated with a sample receipt.</p>
+    <div class="actions">
+      <button class="btn ghost" type="button" data-close>Cancel</button>
+      <button class="btn" type="button" id="rcptSave">Save receipt</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="amexSheet" role="dialog" aria-modal="true" aria-labelledby="amexTitle" hidden>
+  <div class="grip"></div>
+  <h3 id="amexTitle">Import Amex</h3>
+  <p class="lead">Share screenshots of the Amex app's activity screen. Charges are read and added to the Amex sheet.</p>
+  <div id="amexPick" style="display:grid;gap:8px">
+    <label class="drop" for="amexFile">
+      <input type="file" id="amexFile" accept="image/*" multiple>
+      <b>Choose screenshots</b>
+      <small>Several at once is fine. Overlapping screens are merged.</small>
+    </label>
+    <button class="linkbtn" type="button" id="amexSample">Try with a sample screenshot</button>
+  </div>
+  <div class="reading" id="amexReading" hidden><span id="amexReadingText">Reading…</span><div class="track"><i></i></div></div>
+  <div id="amexReview" hidden style="display:grid;gap:12px">
+    <div class="shots" id="amexShots"></div>
+    <ul class="rows" id="amexRows"></ul>
+    <div class="sumline"><span id="amexCount"></span><b id="amexTotal"></b></div>
+    <p class="lead" style="margin:0">Prototype: reading is simulated with sample rows. Check amounts before adding.</p>
+    <div class="actions">
+      <button class="btn ghost" type="button" data-close>Cancel</button>
+      <button class="btn" type="button" id="amexAdd">Add to sheet</button>
+    </div>
+  </div>
+</div>
+
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
   <div class="grip"></div>
   <h3 id="sheetTitle">Log a payback</h3>
@@ -329,11 +434,12 @@ const $ = id => document.getElementById(id);
 const CARDS = {
   main: {name:"Main", label:"Visa ••4021"},
   sub:  {name:"Sub",  label:"JCB ••8830"},
+  amex: {name:"Amex", label:"Amex ••1005"},
 };
 
 // src: amz=Amazon注文スプシ / rcp=レシート（全件freeeカード明細が土台）
 // st: ok=一致 / fill=内訳でカテゴリ補完 / miss=レシート未登録
-const TX = [
+let TX = [
   {id:"t01", d:"11/19", card:"sub",  m:"AMAZON.CO.JP", amt:4280, src:["amz"], st:"fill",
     splits:[["Laundry detergent refill ×2","Household",1280],["USB-C cable 2m","Gadgets",3000]]},
   {id:"t02", d:"11/18", card:"main", m:"SEIJO ISHII JIYUGAOKA", amt:3612, src:["rcp"], st:"ok", cat:"Food"},
@@ -353,6 +459,18 @@ const TX = [
   {id:"t14", d:"11/02", card:"sub",  m:"SPOTIFY", amt:980, src:[], st:"ok", cat:"Subscriptions"},
   {id:"t15", d:"11/01", card:"sub",  m:"AMAZON.CO.JP", amt:6830, src:["amz"], st:"fill",
     splits:[["Coffee beans 500g","Cafe",2830],["Tech books ×2","Books",4000]]},
+  {id:"t16", d:"11/09", card:"amex", m:"MUJI GINZA", amt:3490, src:["amx"], st:"ok", cat:"Household"},
+];
+// レシート読み取り結果の想定（試作では固定）
+const RCPT_SAMPLE = {store:"DON QUIJOTE", d:"11/03", total:3210, pay:"Card ••4021",
+  items:[["Shampoo refill","Household",1280],["Snacks & drinks","Food",860],["Phone stand","Gadgets",1070]]};
+// Amexスクショから読み取った想定の行（試作では固定）。st: new=取り込み対象 / dup=シートにある / pend=確定前
+const AMEX_SAMPLE = [
+  {d:"11/21", m:"UBER *TRIP", amt:1980, cat:"Transport", st:"pend"},
+  {d:"11/20", m:"STARBUCKS COFFEE SHIBUYA", amt:620, cat:"Cafe", st:"new"},
+  {d:"11/19", m:"KINOKUNIYA SHINJUKU", amt:2860, cat:"Books", st:"new"},
+  {d:"11/18", m:"MOBILE SUICA", amt:3000, cat:"Transport", st:"new"},
+  {d:"11/09", m:"MUJI GINZA", amt:3490, cat:"Household", st:"dup"},
 ];
 
 // via: app=アプリから手入力 / sheet=PayPayスプシから取り込み
@@ -467,7 +585,7 @@ function render(){
   const rows = TX.filter(t => (cardFilter==="all" || t.card===cardFilter)
     && (filter==="All" || (t.splits ? t.splits.some(s=>s[1]===filter) : t.cat===filter)));
   const stLabel = {ok:["ok","Matched"], fill:["fill","Itemized"], miss:["miss","Needs receipt"]};
-  const srcLabel = {amz:["amz","Amazon"], rcp:["rcp","Receipt"]};
+  const srcLabel = {amz:["amz","Amazon"], rcp:["rcp","Receipt"], amx:["amx","Amex sheet"]};
   $("tx").innerHTML = rows.length ? rows.map(t=>{
     const st = stLabel[t.st], r = received(t);
     const tags = `<span class="tag card">${short(t.card)}</span>`
@@ -506,9 +624,21 @@ function updatePreview(){
     ? `Adds <b class="num">${yen(a)}</b> to pending. Net spend stays the same until it arrives`
     : `${t.m} net <b class="num">${yen(t.amt-received(t))}</b> → <b class="num">${yen(t.amt-received(t)-a)}</b>`;
 }
+function closeAll(){
+  ["sheet","amexSheet","rcptSheet","scrim","menu"].forEach(id=>$(id).hidden=true);
+  $("openForm").hidden=false; $("openForm").setAttribute("aria-expanded","false");
+  document.body.style.overflow="";
+}
+function toggleMenu(open){
+  $("menu").hidden = !open; $("scrim").hidden = !open;
+  $("openForm").setAttribute("aria-expanded", String(open));
+  if (open) $("goAmex").focus();
+}
 function openSheet(show){
-  $("sheet").hidden = $("scrim").hidden = !show;
-  $("openForm").hidden = show;
+  if (!show) return closeAll();
+  $("menu").hidden = true;
+  $("sheet").hidden = $("scrim").hidden = false;
+  $("openForm").hidden = true;
   document.body.style.overflow = show ? "hidden" : "";
   if (show){
     $("fCard").innerHTML = Object.entries(CARDS).map(([k,c])=>`<option value="${k}">${c.name} ${c.label}</option>`).join("");
@@ -517,9 +647,116 @@ function openSheet(show){
     fillTxSelect(); $("fAmt").focus();
   }
 }
-$("openForm").addEventListener("click", ()=>openSheet(true));
-$("cancelForm").addEventListener("click", ()=>openSheet(false));
-$("scrim").addEventListener("click", ()=>openSheet(false));
+$("openForm").addEventListener("click", ()=>toggleMenu($("menu").hidden));
+$("goBack").addEventListener("click", ()=>openSheet(true));
+$("goAmex").addEventListener("click", ()=>openAmex());
+$("goRcpt").addEventListener("click", ()=>openRcpt());
+
+// レシート登録：撮影 or ライブラリ → 読み取り → カード明細と突合 → 保存
+let rcpt = null, rcptMatchTx = null;
+function rcptStep(step){
+  $("rcptPick").style.display = step==="pick" ? "grid" : "none";
+  $("rcptReading").hidden = step!=="reading";
+  $("rcptReview").hidden = step!=="review"; $("rcptReview").style.display = step==="review" ? "grid" : "none";
+}
+function openRcpt(){
+  $("menu").hidden = true; $("rcptSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true;
+  document.body.style.overflow = "hidden"; rcptStep("pick"); $("rcptCam").value = $("rcptLib").value = "";
+}
+function readRcpt(url){
+  rcptStep("reading");
+  setTimeout(()=>{
+    rcpt = {...RCPT_SAMPLE, items: RCPT_SAMPLE.items.map(i=>[...i]), url};
+    // 同じ金額で、日付が前後3日以内のカード明細を候補にする
+    const md = d => { const [m,dd]=d.split("/"); return +m*31 + +dd; };
+    rcptMatchTx = TX.find(t=>t.amt===rcpt.total && Math.abs(md(t.d)-md(rcpt.d))<=3 && !t.src.includes("rcp")) || null;
+    $("rcptShot").style.backgroundImage = url ? `url(${url})` : "";
+    $("rcptShot").textContent = url ? "" : "SAMPLE";
+    $("rcptKv").innerHTML = `<dt>Store</dt><dd>${rcpt.store}</dd><dt>Date</dt><dd class="num">${rcpt.d}</dd><dt>Total</dt><dd class="num">${yen(rcpt.total)}</dd><dt>Paid</dt><dd>${rcpt.pay}</dd>`;
+    $("rcptMatch").innerHTML = rcptMatchTx
+      ? `<small>MATCHED CARD CHARGE</small><span>${short(rcptMatchTx.card)} · ${rcptMatchTx.d} ${rcptMatchTx.m}</span><span class="num">${yen(rcptMatchTx.amt)} · same amount</span>`
+      : `<small>NO MATCHING CHARGE</small><span>Saved as a receipt only. It will match when the card charge comes in.</span>`;
+    $("rcptRows").innerHTML = rcpt.items.map((it,i)=>`<li style="grid-template-columns:minmax(0,1fr) auto">
+      <span class="m">${it[0]}</span><span class="amt num">${yen(it[2])}</span>
+      <select data-rcat="${i}" style="grid-column:1 / 3" aria-label="Category for ${it[0]}">${CAT_ORDER.map(c=>`<option ${c===it[1]?"selected":""}>${c}</option>`).join("")}</select></li>`).join("");
+    rcptStep("review");
+  }, 1100);
+}
+["rcptCam","rcptLib"].forEach(id=>$(id).addEventListener("change", e=>{
+  const f = e.target.files[0]; if (f) readRcpt(URL.createObjectURL(f));
+}));
+$("rcptSample").addEventListener("click", ()=>readRcpt(""));
+$("rcptRows").addEventListener("change", e=>{ const i = e.target.dataset.rcat; if (i!==undefined) rcpt.items[+i][1] = e.target.value; });
+$("rcptSave").addEventListener("click", ()=>{
+  if (rcptMatchTx){
+    const t = rcptMatchTx;
+    t.src = [...new Set([...t.src, "rcp"])];
+    const cats = new Set(rcpt.items.map(i=>i[1]));
+    if (cats.size > 1){ t.splits = rcpt.items.map(i=>[...i]); delete t.cat; t.st = "fill"; }
+    else { t.cat = [...cats][0]; t.st = "ok"; }
+  }
+  $("rcptCount").textContent = +$("rcptCount").textContent + 1;
+  closeAll(); render();
+  toast(rcptMatchTx ? `Receipt matched to ${rcptMatchTx.m} · ${rcpt.items.length} items` : "Receipt saved");
+});
+$("cancelForm").addEventListener("click", closeAll);
+$("scrim").addEventListener("click", closeAll);
+document.addEventListener("click", e=>{ if (e.target.closest("[data-close]")) closeAll(); });
+
+// Amex取り込み：スクショ → 読み取り → 確認 → シートへ追加
+let amexRows = [], amexShots = [];
+function amexStep(step){
+  $("amexPick").hidden = step!=="pick"; $("amexReading").hidden = step!=="reading"; $("amexReview").hidden = step!=="review";
+  $("amexPick").style.display = step==="pick" ? "grid" : "none";
+  $("amexReview").style.display = step==="review" ? "grid" : "none";
+}
+function openAmex(){
+  $("menu").hidden = true; $("amexSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true;
+  document.body.style.overflow = "hidden"; amexStep("pick"); $("amexFile").value = "";
+}
+function readShots(shots){
+  amexShots = shots; amexStep("reading");
+  $("amexReadingText").textContent = `Reading ${shots.length} screenshot${shots.length>1?"s":""}…`;
+  setTimeout(()=>{
+    const have = new Set(TX.filter(t=>t.card==="amex").map(t=>t.d+t.m+t.amt));
+    amexRows = AMEX_SAMPLE.map((r,i)=>({...r, i, st: r.st==="pend" ? "pend" : have.has(r.d+r.m+r.amt) ? "dup" : "new"}))
+      .map(r=>({...r, on: r.st==="new"}));
+    renderAmex(); amexStep("review");
+  }, 1100);
+}
+function renderAmex(){
+  $("amexShots").innerHTML = amexShots.map(s=>`<div class="shot" style="${s.url?`background-image:url(${s.url})`:""}">${s.url?"":s.name}</div>`).join("");
+  const why = {dup:"Already in the sheet · skipped", pend:"Pending charge · import after it posts"};
+  $("amexRows").innerHTML = amexRows.map(r=>`<li class="${r.st!=="new"?"skip":""}">
+    <input type="checkbox" data-arow="${r.i}" ${r.on?"checked":""} ${r.st!=="new"?"disabled":""} aria-label="Import ${r.m}">
+    <span class="num" style="font-size:12px">${r.d}</span><span class="m">${r.m}</span><span class="amt num">${yen(r.amt)}</span>
+    ${r.st==="new" ? `<select data-acat="${r.i}" aria-label="Category for ${r.m}">${CAT_ORDER.map(c=>`<option ${c===r.cat?"selected":""}>${c}</option>`).join("")}</select>` : `<span class="why">${why[r.st]}</span>`}
+  </li>`).join("");
+  const pick = amexRows.filter(r=>r.on);
+  $("amexCount").textContent = `${pick.length} of ${amexRows.length} rows selected`;
+  $("amexTotal").textContent = yen(pick.reduce((a,r)=>a+r.amt,0));
+  $("amexAdd").disabled = !pick.length;
+  $("amexAdd").textContent = pick.length ? `Add ${pick.length} to sheet` : "Nothing to add";
+}
+$("amexFile").addEventListener("change", e=>{
+  const files = [...e.target.files]; if (!files.length) return;
+  readShots(files.map(f=>({name:f.name, url:URL.createObjectURL(f)})));
+});
+$("amexSample").addEventListener("click", ()=>readShots([{name:"IMG_2041"},{name:"IMG_2042"}]));
+$("amexRows").addEventListener("change", e=>{
+  const a = e.target.dataset;
+  if (a.arow!==undefined){ amexRows[+a.arow].on = e.target.checked; renderAmex(); }
+  if (a.acat!==undefined){ amexRows[+a.acat].cat = e.target.value; }
+});
+$("amexAdd").addEventListener("click", ()=>{
+  const pick = amexRows.filter(r=>r.on);
+  pick.forEach((r,k)=>TX.push({id:"a"+Date.now()+k, d:r.d, card:"amex", m:r.m, amt:r.amt, src:["amx"], st:"ok", cat:r.cat}));
+  const key = d => { const [m,dd]=d.split("/"); return +m*100 + +dd; };
+  TX.sort((a,b)=>key(b.d)-key(a.d));
+  $("amexSync").textContent = "just now";
+  closeAll(); render();
+  toast(`Added ${pick.length} Amex charges · ${yen(pick.reduce((a,r)=>a+r.amt,0))}`);
+});
 $("fCard").addEventListener("change", fillTxSelect);
 ["fTx","fAmt","fPending"].forEach(id=>$(id).addEventListener("input", updatePreview));
 $("whoQuick").addEventListener("click", e=>{ const b=e.target.closest("[data-who]"); if(b){ $("fWho").value=b.dataset.who; } });
@@ -536,7 +773,7 @@ $("addForm").addEventListener("submit", e=>{
     method: document.querySelector('input[name="method"]:checked').value,
     status: pend ? "wait" : "in", date: pend ? "" : `${+mm}/${+dd}`, via:"app"});
   $("addForm").reset(); $("fDate").value = "2026-11-20";
-  openSheet(false); render();
+  closeAll(); render();
   toast(`Saved ${yen(amt)} from ${who}${pend?" as pending":""}`);
 });
 
@@ -555,7 +792,7 @@ document.addEventListener("click", e => {
   if (r){ const b = BACKS.find(x=>x.id===r.dataset.receive); b.status="in"; b.date="11/20"; render(); toast(`Marked ${yen(b.amt)} from ${b.who} as received`); return; }
   if (e.target.id==="moreBacks"){ showAllBacks = !showAllBacks; render(); }
 });
-document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !$("sheet").hidden) openSheet(false); });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeAll(); });
 addEventListener("scroll", ()=>$("bar").classList.toggle("stuck", scrollY > 140), {passive:true});
 render();
 </script>
