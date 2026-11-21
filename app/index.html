@@ -1,0 +1,1132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121620">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="myfinance">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}</style>
+<title>myfinance Wallet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&family=Work+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&family=Roboto+Mono:wght@400;500;600&family=Manrope:wght@400;500;700;800&display=swap">
+<style>
+/* Layout: phone-only single column. Left to spend → paybacks → wishlist → categories → charges. ＋ button opens a bottom sheet to log a payback */
+/* Color: 2色だけ。墨（--ink）とみどり（--accent）。灰色・薄い面はすべてこの2色を紙色に混ぜて作る */
+:root{
+  --ink:#121A16; --accent:#0E6B57; --paper:#FFFFFF;
+  --bg:color-mix(in srgb,var(--ink) 5%,var(--paper));
+  --surface:var(--paper);
+  --muted:color-mix(in srgb,var(--ink) 66%,var(--paper));
+  --line:color-mix(in srgb,var(--ink) 16%,var(--paper));
+  --accent-soft:color-mix(in srgb,var(--accent) 12%,var(--paper));
+  --ink-soft:color-mix(in srgb,var(--ink) 9%,var(--paper));
+  --spent:var(--ink);
+  --plan:var(--accent); --plan-soft:var(--accent-soft);
+  --back:var(--accent); --back-soft:var(--accent-soft);
+  --ok:var(--accent); --warn:var(--accent); --bad:var(--ink); --bad-soft:var(--ink-soft);
+  --scrim:color-mix(in srgb,var(--ink) 45%,transparent);
+  --font-jp:"IBM Plex Sans","Zen Kaku Gothic New",system-ui,-apple-system,"Hiragino Sans",sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --col:440px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ink:#E6EDE9; --accent:#52C3A3; --paper:#0E1411; color-scheme:dark}}
+:root[data-theme="dark"]{--ink:#E6EDE9; --accent:#52C3A3; --paper:#0E1411; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-jp);font-size:15px;line-height:1.6;-webkit-tap-highlight-color:transparent}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{max-width:var(--col);margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 120px;display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+
+/* 上部固定バー */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 0 8px;border-bottom:1px solid transparent;transition:border-color .2s}
+.bar.stuck{border-bottom-color:var(--line)}
+.bar h1{margin:0;font-size:17px;font-weight:900}
+.bar h1 small{font-size:12px;font-weight:500;color:var(--muted);margin-left:6px}
+.mini{font-size:12px;color:var(--muted);text-align:right;opacity:0;transition:opacity .2s}
+.bar.stuck .mini{opacity:1}
+.mini b{font-family:var(--font-num);font-size:15px;color:var(--ink);font-weight:600}
+/* Night skin：濃紺のカード＋シアン＋ライムの金額、角丸、ヒーロー帯 */
+.night-hero{display:none}
+.skin-night{--money:#d4f04a; color-scheme:dark}
+.skin-night body{background:var(--bg)}
+.skin-night .night-hero{display:grid;gap:14px;justify-items:center;text-align:center;margin:0 -16px;padding:28px 16px 0;
+  background:
+    radial-gradient(120% 90% at 78% 0%, color-mix(in srgb,var(--accent) 30%,transparent), transparent 62%),
+    radial-gradient(90% 70% at 0% 100%, color-mix(in srgb,var(--money) 14%,transparent), transparent 60%),
+    repeating-linear-gradient(-28deg, color-mix(in srgb,var(--ink) 5%,transparent) 0 1px, transparent 1px 22px),
+    linear-gradient(180deg, color-mix(in srgb,var(--paper) 70%,var(--ink) 30%), var(--bg))}
+.night-hero h2{margin:0;font-size:28px;font-weight:800;letter-spacing:.02em;line-height:1.1}
+.night-hero p{margin:-8px 0 0;font-size:15px;color:var(--muted)}
+.night-hero .pillbtn{font:inherit;font-size:14px;font-weight:700;color:var(--paper);background:var(--accent);border:0;border-radius:999px;min-height:40px;padding:0 22px;cursor:pointer;
+  box-shadow:12px 0 0 -3px color-mix(in srgb,var(--accent) 45%,transparent),22px 0 0 -7px color-mix(in srgb,var(--accent) 22%,transparent)}
+.night-hero nav{display:flex;align-items:flex-end;gap:4px;width:100%;justify-content:space-between;padding:0 4px}
+.night-hero nav button{font:inherit;font-size:13px;color:var(--muted);background:none;border:0;border-bottom:2px solid transparent;min-height:44px;padding:0 6px;cursor:pointer}
+.night-hero nav button[aria-current="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.night-hero nav .dots{color:var(--ink);letter-spacing:2px;font-weight:800;padding-bottom:12px}
+.skin-night .card{border:0;border-radius:12px;background:var(--paper);box-shadow:0 12px 28px color-mix(in srgb,#000 40%,transparent)}
+.skin-night .free,.skin-night .tx .amt,.skin-night .wish .num,.skin-night .backs .num,.skin-night .legend .num,.skin-night .back-sum .num,.skin-night .perday b,.skin-night .mini b,.skin-night .rows .amt,.skin-night .order .oh .num{color:var(--money)}
+.skin-night .free.neg{color:var(--money)}
+.skin-night .meter,.skin-night .meter .seg.spent{border-radius:999px}
+.skin-night .meter{overflow:visible}
+.skin-night .btn,.skin-night .chip,.skin-night .pill,.skin-night .src,.skin-night .sty,.skin-night .match span{border-radius:999px}
+.skin-night .back-sum div,.skin-night .netline,.skin-night .wish,.skin-night .backs li,.skin-night .order,.skin-night .matchbox,.skin-night .drop,.skin-night .pick2 label,.skin-night .field input,.skin-night .field select,.skin-night .seg-ctl label,.skin-night .rows select,.skin-night .menu,.skin-night .tag,.skin-night .st{border-radius:10px}
+.skin-night .tag,.skin-night .st{border-radius:6px}
+.skin-night .menu button:first-child{border-radius:10px 10px 0 0}
+.skin-night .sheet{border-radius:20px 20px 0 0}
+.skin-night .fab{border-radius:50%;box-shadow:-14px 0 0 -3px color-mix(in srgb,var(--accent) 45%,transparent),-26px 0 0 -8px color-mix(in srgb,var(--accent) 22%,transparent)}
+.skin-night .fab[aria-expanded="true"]{background:var(--accent)}
+.skin-night .toast{border-radius:999px}
+.skin-night .bar{height:0;padding:0;overflow:hidden;background:var(--paper);margin:0 -16px;padding-inline:16px}
+.skin-night .bar.stuck{height:auto;padding-block:12px 8px;overflow:visible}
+/* スタイル切り替え（試作用） */
+.styles{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
+.styles::-webkit-scrollbar{display:none}
+.sty{flex:none;display:grid;grid-template-columns:auto auto;align-items:center;gap:2px 8px;font:inherit;text-align:left;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:0;min-height:52px;padding:6px 12px 6px 8px;cursor:pointer}
+.sty[aria-pressed="true"]{border:2px solid var(--ink);padding:5px 11px 5px 7px}
+.sty .sw{grid-row:1 / 3;display:flex}
+.sty .sw i{display:block;width:14px;height:28px}
+.sty b{font-size:13px;line-height:1.2}
+.sty small{font-size:11px;color:var(--muted);line-height:1.2;white-space:nowrap}
+.sync{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 16px}
+.sync::-webkit-scrollbar{display:none}
+.src{flex:none;font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:0;padding:2px 10px;background:var(--surface);white-space:nowrap}
+.src b{color:var(--ink);font-weight:500}
+.src.sample{color:var(--plan);border-color:var(--plan);font-weight:700}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:0;padding:16px}
+.card h2{margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card h2 span{letter-spacing:0;font-weight:500}
+
+/* 残り額 */
+.free-label{font-size:12px;color:var(--muted)}
+.free{font-size:42px;font-weight:600;line-height:1.1}
+.free.neg{color:var(--bad)}
+.hero-sub{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
+.pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:0}
+.pill.ok{background:var(--accent-soft);color:var(--ok)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.perday{font-size:12px;color:var(--muted)}
+.perday b{font-family:var(--font-num);color:var(--ink);font-weight:600;font-size:15px}
+.meter{position:relative;margin:26px 0 6px;height:28px;border-radius:0;background:var(--bg);border:1px solid var(--line)}
+.meter .seg{position:absolute;top:0;bottom:0;transition:width .35s ease,left .35s ease}
+.seg.spent{left:0;background:var(--spent);border-radius:0}
+.seg.plan{background:repeating-linear-gradient(-45deg,var(--plan) 0 5px,var(--plan-soft) 5px 9px)}
+.seg.over{background:var(--bad)}
+.pace{position:absolute;top:-7px;bottom:-7px;width:0;border-left:2px dashed var(--accent)}
+.pace span{position:absolute;top:-19px;left:-30px;width:60px;text-align:center;font-size:10px;color:var(--accent);font-weight:700;white-space:nowrap}
+.scale{display:flex;justify-content:space-between;font-size:10px;color:var(--muted)}
+.legend{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
+.legend div{border-top:3px solid var(--line);padding-top:4px}
+.legend .l-spent{border-color:var(--spent)}
+.legend .l-plan{border-color:var(--plan)}
+.legend .l-free{border-color:var(--accent)}
+.legend small{display:block;font-size:11px;color:var(--muted)}
+.legend .num{font-size:14px;font-weight:500}
+.netline{margin-top:10px;font-size:12px;color:var(--muted);background:var(--bg);border-radius:0;padding:7px 10px}
+.netline b{color:var(--back);font-weight:500}
+.netline i{font-style:normal;color:var(--warn)}
+
+/* 割り勘 */
+.back-sum{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.back-sum div{background:var(--bg);border-radius:0;padding:8px 12px}
+.back-sum small{display:block;font-size:11px;color:var(--muted)}
+.back-sum .num{font-size:18px;font-weight:500}
+.back-sum .in .num{color:var(--back)}
+.back-sum .wait .num{color:var(--warn)}
+.backs{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.backs li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 10px;align-items:center;min-height:56px;padding:8px 10px;border-radius:0;border:1px solid var(--line)}
+.backs li.pending{border-style:dashed;border-color:var(--warn)}
+.backs .who{font-weight:500}
+.backs .link{font-size:11px;color:var(--muted);grid-column:1;overflow-wrap:anywhere}
+.backs .right{grid-row:1 / 3;grid-column:2;text-align:right;display:grid;gap:4px;justify-items:end}
+.backs .num{font-weight:500;color:var(--back)}
+.backs li.pending .num{color:var(--warn)}
+.more{font:inherit;font-size:12px;color:var(--back);background:none;border:0;padding:10px 0 0;cursor:pointer;width:100%;text-align:center}
+
+.btn{font:inherit;font-size:15px;font-weight:700;border-radius:0;min-height:48px;padding:0 18px;cursor:pointer;border:1px solid var(--back);background:var(--back);color:var(--surface)}
+.btn.ghost{background:transparent;color:var(--back)}
+.btn.sm{font-size:12px;min-height:32px;padding:0 12px;border-radius:0}
+
+/* 欲しいもの */
+.wishes{display:grid;gap:8px}
+.wish{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;min-height:56px;padding:8px 12px;border:1px solid var(--line);border-radius:0;cursor:pointer}
+.wish.on{border-color:var(--plan);background:var(--plan-soft)}
+.wish input{width:22px;height:22px;accent-color:var(--plan);margin:0}
+.wish .name{font-weight:500;overflow-wrap:anywhere;line-height:1.4}
+.wish .meta{font-size:11px;color:var(--muted)}
+.wish .num{font-size:14px;font-weight:500}
+.prio{font-size:10px;font-weight:700;padding:0 5px;border-radius:0;margin-left:6px;vertical-align:2px;border:1px solid currentColor}
+.prio.h{color:var(--bad)} .prio.m{color:var(--plan)} .prio.l{color:var(--muted)}
+.wish-foot{font-size:12px;color:var(--muted);margin-top:10px;display:grid;gap:2px}
+.wish-foot b{color:var(--plan)}
+
+/* カテゴリ */
+.cats{display:grid;gap:2px}
+.cat{display:grid;grid-template-columns:5.6em minmax(0,1fr) 5.4em;align-items:center;gap:10px;min-height:40px;padding:0 8px;margin:0 -8px;border-radius:0;cursor:pointer;border:0;background:none;color:inherit;font:inherit;font-size:14px;text-align:left}
+.cat.active{background:var(--accent-soft)}
+.cat .bar2{height:8px;border-radius:0;background:var(--bg);overflow:hidden;display:flex}
+.cat .bar2 i{display:block;height:100%;background:var(--accent)}
+.cat .bar2 i.p{background:var(--plan)}
+.cat .num{text-align:right;font-size:13px;line-height:1.25}
+.cat small{color:var(--plan);font-size:11px}
+
+/* 明細 */
+.match{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.match span{font-size:11px;border-radius:0;padding:2px 10px;background:var(--bg);color:var(--muted)}
+.match b{font-family:var(--font-num);color:var(--ink);font-weight:500}
+.match .warn b{color:var(--warn)}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px 6px;padding:2px 16px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:0;min-height:34px;padding:0 14px;cursor:pointer;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.tx{list-style:none;margin:4px 0 0;padding:0}
+.tx li{display:grid;grid-template-columns:2.9em minmax(0,1fr) auto;gap:2px 10px;padding:12px 0;border-top:1px solid var(--line)}
+.tx li:first-child{border-top:0}
+.tx .d{font-size:12px;color:var(--muted);padding-top:2px}
+.tx .m{font-weight:500;overflow-wrap:anywhere;line-height:1.4}
+.tx .amt{text-align:right;font-weight:500}
+.tx .amt s{display:block;font-size:11px;color:var(--muted);font-weight:400}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.tag{font-size:10px;font-family:var(--font-num);border-radius:0;padding:0 5px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.tag.card{background:var(--bg)}
+.tag.amz{border-color:var(--plan);color:var(--plan)}
+.tag.amx{border-color:var(--ink);color:var(--ink)}
+.tag.rcp{border-color:var(--accent);color:var(--accent)}
+.st{font-size:10px;font-weight:700;border-radius:0;padding:0 5px;white-space:nowrap}
+.st.ok{background:var(--accent-soft);color:var(--ok)}
+.st.fill{background:var(--plan-soft);color:var(--plan)}
+.st.miss{background:var(--bad-soft);color:var(--bad)}
+.splits{grid-column:2 / 4;display:grid;gap:1px;margin-top:4px;padding-left:10px;border-left:2px solid var(--line)}
+.splits.back{border-left-color:var(--back)}
+.splits div{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted)}
+.splits em{font-style:normal;color:var(--ink)}
+.splits .in{color:var(--back)}
+.splits .wait{color:var(--warn)}
+.tx-foot{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;margin-top:6px;padding-top:10px;border-top:1px solid var(--line)}
+.empty{color:var(--muted);font-size:13px;padding:16px 0;display:block!important}
+
+/* 右下ボタン */
+.fab{position:fixed;z-index:23;bottom:calc(16px + env(safe-area-inset-bottom,0px));right:max(calc(16px + env(safe-area-inset-right,0px)),calc((100vw - var(--col)) / 2 + 16px));
+  display:grid;place-items:center;width:60px;height:60px;font:inherit;font-size:32px;font-weight:300;line-height:1;padding:0;border-radius:0;border:0;background:var(--back);color:var(--surface);cursor:pointer;transition:transform .2s}
+.fab[aria-expanded="true"]{transform:rotate(45deg);background:var(--ink)}
+/* ＋で開く選択メニュー */
+.menu{position:fixed;z-index:22;bottom:calc(84px + env(safe-area-inset-bottom,0px));right:max(calc(16px + env(safe-area-inset-right,0px)),calc((100vw - var(--col)) / 2 + 16px));
+  display:grid;gap:0;width:min(280px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--ink);animation:up .16s ease}
+.menu button{display:grid;grid-template-columns:40px minmax(0,1fr);align-items:center;gap:12px;text-align:left;font:inherit;color:var(--ink);background:none;border:0;border-top:1px solid var(--line);min-height:64px;padding:8px 14px;cursor:pointer}
+.menu button:first-child{border-top:0}
+.menu button:active{background:var(--accent-soft)}
+.menu .ic{display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--accent);color:var(--accent);font-family:var(--font-num);font-size:11px;font-weight:600}
+.menu b{display:block;font-size:15px}
+.menu small{display:block;font-size:12px;color:var(--muted)}
+/* レシート登録 */
+.pick2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pick2 label{display:grid;place-items:center;align-content:center;gap:6px;min-height:130px;border:1px solid var(--accent);color:var(--ink);cursor:pointer;text-align:center;padding:12px}
+.pick2 label:first-child{background:var(--accent);color:var(--paper)}
+.pick2 .ic2{font-size:26px;line-height:1}
+.pick2 b{font-size:15px}
+.pick2 input{position:absolute;width:1px;height:1px;opacity:0}
+.rcpt{display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;align-items:start}
+.rcpt .shot{width:72px;height:120px}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 12px;font-size:13px;margin:0}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;font-weight:500;overflow-wrap:anywhere}
+.matchbox{border:1px solid var(--accent);background:var(--accent-soft);padding:10px 12px;font-size:13px;display:grid;gap:2px}
+.matchbox small{color:var(--muted);font-size:11px;letter-spacing:.06em}
+/* Amazon取り込み */
+.order{border:1px solid var(--line);padding:10px 12px;display:grid;gap:6px}
+.order.on{border-color:var(--accent)}
+.order.skip{color:var(--muted)}
+.order head,.order .oh{display:flex;align-items:center;gap:10px}
+.order .oh input{width:22px;height:22px;accent-color:var(--accent);margin:0}
+.order .oh .t{flex:1;min-width:0;font-weight:700}
+.order .oh .num{font-weight:600}
+.order .mt{font-size:12px;color:var(--muted)}
+.order .mt b{color:var(--accent);font-weight:500}
+.order .rows{border-top:1px solid var(--line)}
+.order .rows li{grid-template-columns:minmax(0,1fr) auto;padding:8px 0}
+.order .rows li:last-child{border-bottom:0}
+.order .rows select{grid-column:1 / 3}
+/* Amex取り込み */
+.drop{display:grid;place-items:center;gap:6px;text-align:center;min-height:170px;padding:20px;border:1px dashed var(--accent);background:var(--accent-soft);cursor:pointer;color:var(--ink)}
+.drop b{font-size:15px}
+.drop small{font-size:12px;color:var(--muted)}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.linkbtn{font:inherit;font-size:13px;color:var(--accent);background:none;border:0;padding:6px 0;cursor:pointer;text-decoration:underline;text-underline-offset:3px;justify-self:center}
+.reading{display:grid;gap:8px;padding:28px 0;text-align:center;font-size:14px}
+.reading .track{height:4px;background:var(--line);overflow:hidden}
+.reading .track i{display:block;height:100%;width:40%;background:var(--accent);animation:slide 1s linear infinite}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+.shots{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.shot{flex:none;width:56px;height:96px;border:1px solid var(--line);background:var(--bg) center/cover no-repeat;display:grid;place-items:end center;font-family:var(--font-num);font-size:9px;color:var(--muted);padding:2px}
+.rows{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.rows li{display:grid;grid-template-columns:auto 2.9em minmax(0,1fr) auto;align-items:center;gap:4px 10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.rows li.skip{color:var(--muted)}
+.rows input[type=checkbox]{width:22px;height:22px;accent-color:var(--accent);margin:0}
+.rows .m{font-weight:500;overflow-wrap:anywhere;line-height:1.35}
+.rows .amt{text-align:right;font-weight:500}
+.rows select{grid-column:3 / 5;font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:0;min-height:34px;padding:0 8px;min-width:0}
+.rows .why{grid-column:3 / 5;font-size:11px}
+.sumline{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+.sumline b{color:var(--ink);font-family:var(--font-num);font-weight:600}
+
+/* ボトムシート */
+.scrim{position:fixed;inset:0;z-index:20;background:var(--scrim)}
+.sheet{position:fixed;z-index:21;left:0;right:0;bottom:0;margin:0 auto;max-width:var(--col);max-height:92%;overflow-y:auto;background:var(--surface);border-radius:0;
+  padding:8px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));animation:up .22s ease}
+@keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+.grip{width:40px;height:4px;border-radius:0;background:var(--line);margin:0 auto 10px}
+.sheet h3{margin:0 0 4px;font-size:17px;font-weight:900}
+.sheet .lead{margin:0 0 14px;font-size:12px;color:var(--muted)}
+.sheet form{display:grid;gap:14px}
+.field{display:grid;gap:4px;font-size:12px;font-weight:700;color:var(--muted);min-width:0}
+.field input,.field select{font:inherit;font-size:16px;font-weight:400;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:0;min-height:48px;padding:0 12px;width:100%;min-width:0}
+.amt-in{font-family:var(--font-num)!important;font-size:28px!important;font-weight:500!important;min-height:60px!important}
+.seg-ctl{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg-ctl label{display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;font-size:15px;font-weight:500;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:0;cursor:pointer}
+.seg-ctl label:has(input:checked){border-color:var(--back);background:var(--back-soft);color:var(--back);font-weight:700}
+.seg-ctl input{position:absolute;opacity:0;pointer-events:none}
+.who-quick{display:flex;gap:6px;flex-wrap:wrap}
+.who-quick button{font:inherit;font-size:13px;min-height:32px;padding:0 12px;border-radius:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.chk{display:flex;align-items:center;gap:10px;min-height:44px;font-size:14px;color:var(--ink);cursor:pointer}
+.chk input{accent-color:var(--warn);width:22px;height:22px;margin:0}
+.preview{font-size:12px;color:var(--muted);background:var(--back-soft);border-radius:0;padding:8px 12px}
+.preview:empty{display:none}
+.preview b{color:var(--ink);font-weight:500}
+.err{font-size:13px;color:var(--bad)}
+.err:empty{display:none}
+.actions{display:grid;grid-template-columns:1fr 2fr;gap:8px}
+
+.toast{position:fixed;z-index:30;left:50%;transform:translateX(-50%);bottom:calc(88px + env(safe-area-inset-bottom,0px));max-width:calc(100% - 32px);background:var(--ink);color:var(--surface);font-size:13px;font-weight:700;border-radius:0;padding:10px 18px;}
+/* 2色で状態を分ける：塗り／斜線／点線／反転 */
+.pill.bad,.st.miss{background:var(--ink);color:var(--paper)}
+.st.fill{background:none;border:1px solid var(--accent);padding:0 4px}
+.seg.over{background:repeating-linear-gradient(45deg,var(--ink) 0 2px,var(--paper) 2px 5px)}
+.cat .bar2 i{background:var(--ink)}
+.cat .bar2 i.p{background:repeating-linear-gradient(-45deg,var(--accent) 0 3px,var(--accent-soft) 3px 6px)}
+.cat .num small{color:var(--accent)}
+.legend .l-free{border-top-style:dashed}
+.free.neg{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:6px}
+.wish.on{border-color:var(--accent)}
+.toast{border:1px solid var(--ink)}
+.toast{background:var(--ink);color:var(--paper)}
+@media (max-width:360px){.free{font-size:34px}.legend .num{font-size:12px}}
+@media (prefers-reduced-motion:reduce){.meter .seg,.sheet{transition:none;animation:none}}
+</style>
+</head>
+<body>
+
+
+<div class="app">
+  <header class="bar" id="bar">
+    <h1>November<small><span class="num">11</span> days left</small></h1>
+    <div class="mini">Free to spend <b id="miniFree"></b></div>
+  </header>
+
+  <div class="night-hero" id="nightHero">
+    <h2>November</h2>
+    <p>Budget ¥100,000 · 11 days left</p>
+    <button class="pillbtn" type="button" id="nightAdd">＋ Add</button>
+    <nav aria-label="Sections">
+      <button type="button" aria-current="true" data-goto="Budget">Overview</button>
+      <button type="button" data-goto="Paybacks">Paybacks</button>
+      <button type="button" data-goto="Wishlist">Wishlist</button>
+      <button type="button" data-goto="Charges">Charges</button>
+      <span class="dots" aria-hidden="true">•••</span>
+    </nav>
+  </div>
+
+  <div class="styles" id="styles" aria-label="Font and color style"></div>
+  <div class="sync">
+    <span class="src sample">Sample</span>
+    <span class="src">freee <b>11/20 08:12</b></span>
+    <span class="src">Amex <b id="amexSync">11/09</b></span>
+    <span class="src">Amazon <b id="amzSync">11/10</b></span>
+    <span class="src">PayPay <b id="ppSync">11/14</b></span>
+    <span class="src">Receipts <b id="rcptCount">14</b></span>
+  </div>
+
+  <section class="card" aria-label="Budget">
+    <div class="free-label">Left to spend, wishlist included (budget ¥100,000)</div>
+    <div class="free num" id="free">¥0</div>
+    <div class="hero-sub">
+      <span class="pill ok" id="pacePill"></span>
+      <span class="perday">Per day <b id="perDay"></b></span>
+    </div>
+    <div class="meter">
+      <div class="seg spent" id="segSpent"></div>
+      <div class="seg plan" id="segPlan"></div>
+      <div class="seg over" id="segOver"></div>
+      <div class="pace" id="pace"><span>Today's pace</span></div>
+    </div>
+    <div class="scale num"><span>0</span><span>50k</span><span>100k</span></div>
+    <div class="legend">
+      <div class="l-spent"><small>Net spent</small><span class="num" id="lgSpent"></span></div>
+      <div class="l-plan"><small>Planned</small><span class="num" id="lgPlan"></span></div>
+      <div class="l-free"><small>vs. pace</small><span class="num" id="lgPace"></span></div>
+    </div>
+    <div class="netline" id="netline"></div>
+  </section>
+
+  <section class="card" aria-label="Paybacks">
+    <h2>Paybacks <span id="bSplit"></span></h2>
+    <div class="back-sum">
+      <div class="in"><small>Received</small><span class="num" id="bIn"></span></div>
+      <div class="wait"><small>Pending</small><span class="num" id="bWait"></span></div>
+    </div>
+    <ul class="backs" id="backs"></ul>
+    <button class="more" type="button" id="moreBacks" hidden></button>
+  </section>
+
+  <section class="card" aria-label="Wishlist">
+    <h2>Wishlist <span>Check = buying this month</span></h2>
+    <div class="wishes" id="wishes"></div>
+    <div class="wish-foot"><span>Planned this month <b class="num" id="wishTotal"></b></span><span id="wishHint"></span></div>
+  </section>
+
+  <section class="card" aria-label="By category">
+    <h2>By category <span>Tap to filter</span></h2>
+    <div class="cats" id="cats"></div>
+  </section>
+
+  <section class="card" aria-label="Charges" id="txCard">
+    <h2>Card charges <span>freee · Amex · Amazon · receipts</span></h2>
+    <div class="match">
+      <span>Receipt match <b id="mOk"></b></span>
+      <span>Itemized <b id="mSplit"></b></span>
+      <span class="warn">Needs receipt <b id="mMiss"></b></span>
+    </div>
+    <div class="chips" id="cardFilters"></div>
+    <div class="chips" id="filters"></div>
+    <ul class="tx" id="tx"></ul>
+    <div class="tx-foot"><span id="txCount"></span><span class="num" id="txSum"></span></div>
+  </section>
+</div>
+
+<div class="menu" id="menu" role="menu" hidden>
+  <button type="button" role="menuitem" id="goAmex"><span class="ic">AMEX</span><span><b>Import Amex</b><small>From a payment screenshot</small></span></button>
+  <button type="button" role="menuitem" id="goAmz"><span class="ic">AMZN</span><span><b>Import Amazon</b><small>From an order history screenshot</small></span></button>
+  <button type="button" role="menuitem" id="goPP"><span class="ic">PAY</span><span><b>Import PayPay</b><small>From a transfer history screenshot</small></span></button>
+  <button type="button" role="menuitem" id="goRcpt"><span class="ic">RCPT</span><span><b>Add a receipt</b><small>Take a photo or pick from library</small></span></button>
+  <button type="button" role="menuitem" id="goBack"><span class="ic">¥</span><span><b>Log a payback</b><small>Cash or PayPay you got back</small></span></button>
+</div>
+<button class="fab" type="button" id="openForm" aria-label="Add" aria-haspopup="menu" aria-expanded="false" aria-controls="menu">＋</button>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="sheet" id="rcptSheet" role="dialog" aria-modal="true" aria-labelledby="rcptTitle" hidden>
+  <div class="grip"></div>
+  <h3 id="rcptTitle">Add a receipt</h3>
+  <p class="lead">The receipt is matched to a card charge, and its items fill in the categories.</p>
+  <div id="rcptPick" style="display:grid;gap:8px">
+    <div class="pick2">
+      <label for="rcptCam"><input type="file" id="rcptCam" accept="image/*" capture="environment"><span class="ic2">◉</span><b>Take photo</b></label>
+      <label for="rcptLib"><input type="file" id="rcptLib" accept="image/*" multiple><span class="ic2">▦</span><b>From library</b></label>
+    </div>
+    <button class="linkbtn" type="button" id="rcptSample">Try with a sample receipt</button>
+  </div>
+  <div class="reading" id="rcptReading" hidden><span id="rcptReadingText">Reading receipt…</span><div class="track"><i></i></div></div>
+  <div id="rcptReview" hidden style="display:none;gap:12px">
+    <div class="rcpt">
+      <div class="shot" id="rcptShot"></div>
+      <dl class="kv" id="rcptKv"></dl>
+    </div>
+    <div class="matchbox" id="rcptMatch"></div>
+    <ul class="rows" id="rcptRows"></ul>
+    <p class="lead" style="margin:0">Prototype: reading is simulated with a sample receipt.</p>
+    <div class="actions">
+      <button class="btn ghost" type="button" data-close>Cancel</button>
+      <button class="btn" type="button" id="rcptSave">Save receipt</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="ppSheet" role="dialog" aria-modal="true" aria-labelledby="ppTitle" hidden>
+  <div class="grip"></div>
+  <h3 id="ppTitle">Import PayPay</h3>
+  <p class="lead">Share screenshots of PayPay's transaction history. Money you received is logged as paybacks against your card charges.</p>
+  <div id="ppPick" style="display:grid;gap:8px">
+    <label class="drop" for="ppFile">
+      <input type="file" id="ppFile" accept="image/*" multiple>
+      <b>Choose screenshots</b>
+      <small>Received transfers are read. Payments you made are skipped.</small>
+    </label>
+    <button class="linkbtn" type="button" id="ppSample">Try with a sample screenshot</button>
+  </div>
+  <div class="reading" id="ppReading" hidden><span id="ppReadingText">Reading…</span><div class="track"><i></i></div></div>
+  <div id="ppReview" hidden style="display:none;gap:12px">
+    <div class="shots" id="ppShots"></div>
+    <div id="ppRows" style="display:grid;gap:12px"></div>
+    <div class="sumline"><span id="ppCount"></span><b id="ppTotal"></b></div>
+    <p class="lead" style="margin:0">Prototype: reading is simulated with sample transfers.</p>
+    <div class="actions">
+      <button class="btn ghost" type="button" data-close>Cancel</button>
+      <button class="btn" type="button" id="ppAdd">Log paybacks</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="amzSheet" role="dialog" aria-modal="true" aria-labelledby="amzTitle" hidden>
+  <div class="grip"></div>
+  <h3 id="amzTitle">Import Amazon</h3>
+  <p class="lead">Share screenshots of Amazon's order history. Each order is matched to its card charge and split by item.</p>
+  <div id="amzPick" style="display:grid;gap:8px">
+    <label class="drop" for="amzFile">
+      <input type="file" id="amzFile" accept="image/*" multiple>
+      <b>Choose screenshots</b>
+      <small>Open an order's details for item prices. Several at once is fine.</small>
+    </label>
+    <button class="linkbtn" type="button" id="amzSample">Try with a sample screenshot</button>
+  </div>
+  <div class="reading" id="amzReading" hidden><span id="amzReadingText">Reading…</span><div class="track"><i></i></div></div>
+  <div id="amzReview" hidden style="display:none;gap:12px">
+    <div class="shots" id="amzShots"></div>
+    <div id="amzOrders" style="display:grid;gap:12px"></div>
+    <div class="sumline"><span id="amzCount"></span><b id="amzTotal"></b></div>
+    <p class="lead" style="margin:0">Prototype: reading is simulated with sample orders.</p>
+    <div class="actions">
+      <button class="btn ghost" type="button" data-close>Cancel</button>
+      <button class="btn" type="button" id="amzAdd">Split charges</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="amexSheet" role="dialog" aria-modal="true" aria-labelledby="amexTitle" hidden>
+  <div class="grip"></div>
+  <h3 id="amexTitle">Import Amex</h3>
+  <p class="lead">Share screenshots of the Amex app's activity screen. Charges are read and added to the Amex sheet.</p>
+  <div id="amexPick" style="display:grid;gap:8px">
+    <label class="drop" for="amexFile">
+      <input type="file" id="amexFile" accept="image/*" multiple>
+      <b>Choose screenshots</b>
+      <small>Several at once is fine. Overlapping screens are merged.</small>
+    </label>
+    <button class="linkbtn" type="button" id="amexSample">Try with a sample screenshot</button>
+  </div>
+  <div class="reading" id="amexReading" hidden><span id="amexReadingText">Reading…</span><div class="track"><i></i></div></div>
+  <div id="amexReview" hidden style="display:grid;gap:12px">
+    <div class="shots" id="amexShots"></div>
+    <ul class="rows" id="amexRows"></ul>
+    <div class="sumline"><span id="amexCount"></span><b id="amexTotal"></b></div>
+    <p class="lead" style="margin:0">Prototype: reading is simulated with sample rows. Check amounts before adding.</p>
+    <div class="actions">
+      <button class="btn ghost" type="button" data-close>Cancel</button>
+      <button class="btn" type="button" id="amexAdd">Add to sheet</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+  <div class="grip"></div>
+  <h3 id="sheetTitle">Log a payback</h3>
+  <p class="lead">PayPay comes in from screenshots (Import PayPay). Use this for cash, or to add PayPay by hand.</p>
+  <form id="addForm" novalidate>
+    <label class="field">Amount
+      <input class="amt-in" type="number" id="fAmt" inputmode="numeric" min="1" step="1" placeholder="¥0">
+    </label>
+    <div class="field">Received via
+      <div class="seg-ctl">
+        <label><input type="radio" name="method" id="mCash" value="cash" checked>Cash</label>
+        <label><input type="radio" name="method" id="mPay" value="paypay">PayPay</label>
+      </div>
+    </div>
+    <label class="field">From
+      <input type="text" id="fWho" placeholder="Name" autocomplete="off">
+    </label>
+    <div class="who-quick" id="whoQuick"></div>
+    <label class="field">Card used
+      <select id="fCard"></select>
+    </label>
+    <label class="field">Which charge
+      <select id="fTx"></select>
+    </label>
+    <div class="two">
+      <label class="field">Date received<input type="date" id="fDate" value="2026-11-20"></label>
+      <label class="chk"><input type="checkbox" id="fPending">Not received yet</label>
+    </div>
+    <div class="preview" id="fPreview"></div>
+    <div class="err" id="fErr" role="alert"></div>
+    <div class="actions">
+      <button class="btn ghost" type="button" id="cancelForm">Cancel</button>
+      <button class="btn" type="submit">Save</button>
+    </div>
+  </form>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+const BUDGET = 100000, DAY = 20, DAYS = 30;
+const yen = n => (n < 0 ? "-¥" : "¥") + Math.abs(Math.round(n)).toLocaleString("en-US");
+const $ = id => document.getElementById(id);
+
+const CARDS = {
+  main: {name:"Main", label:"Visa ••4021"},
+  sub:  {name:"Sub",  label:"JCB ••8830"},
+  amex: {name:"Amex", label:"Amex ••1005"},
+};
+
+// src: amz=Amazon注文履歴スクショ（スプシ取り込みはなし） / rcp=レシート（全件freeeカード明細が土台）
+// st: ok=一致 / fill=内訳でカテゴリ補完 / miss=レシート未登録
+let TX = [
+  {id:"t01", d:"11/19", card:"sub",  m:"AMAZON.CO.JP", amt:4280, src:[], st:"miss", cat:"Other"},
+  {id:"t02", d:"11/18", card:"main", m:"SEIJO ISHII JIYUGAOKA", amt:3612, src:["rcp"], st:"ok", cat:"Food"},
+  {id:"t03", d:"11/17", card:"main", m:"BLUE BOTTLE COFFEE", amt:680, src:["rcp"], st:"ok", cat:"Cafe"},
+  {id:"t04", d:"11/16", card:"main", m:"UBER EATS", amt:2450, src:[], st:"ok", cat:"Food"},
+  {id:"t05", d:"11/15", card:"main", m:"HANDS SHIBUYA", amt:5940, src:["rcp"], st:"fill",
+    splits:[["Food storage set","Household",2200],["Masking tape & art supplies","Hobbies",3740]]},
+  {id:"t06", d:"11/14", card:"sub",  m:"NETFLIX.COM", amt:1590, src:[], st:"ok", cat:"Subscriptions"},
+  {id:"t07", d:"11/13", card:"main", m:"GYU-KAKU EBISU", amt:9600, src:["rcp"], st:"ok", cat:"Food", note:"3 people"},
+  {id:"t08", d:"11/12", card:"main", m:"UNIQLO GINZA", amt:7990, src:["rcp"], st:"ok", cat:"Clothing"},
+  {id:"t09", d:"11/10", card:"sub",  m:"AMAZON.CO.JP", amt:12800, src:["amz"], st:"fill",
+    splits:[["Mechanical keyboard","Gadgets",12800]]},
+  {id:"t10", d:"11/08", card:"main", m:"LIFE NAKAMEGURO", amt:4318, src:["rcp"], st:"ok", cat:"Food"},
+  {id:"t11", d:"11/06", card:"main", m:"TOHO CINEMAS", amt:2200, src:[], st:"ok", cat:"Hobbies", note:"2 people"},
+  {id:"t12", d:"11/05", card:"main", m:"ENEOS", amt:5600, src:[], st:"ok", cat:"Transport"},
+  {id:"t13", d:"11/03", card:"main", m:"DON QUIJOTE", amt:3210, src:[], st:"miss", cat:"Other"},
+  {id:"t14", d:"11/02", card:"sub",  m:"SPOTIFY", amt:980, src:[], st:"ok", cat:"Subscriptions"},
+  {id:"t15", d:"11/01", card:"sub",  m:"AMAZON.CO.JP", amt:6830, src:["amz"], st:"fill",
+    splits:[["Coffee beans 500g","Cafe",2830],["Tech books ×2","Books",4000]]},
+  {id:"t16", d:"11/09", card:"amex", m:"MUJI GINZA", amt:3490, src:["amx"], st:"ok", cat:"Household"},
+];
+// レシート読み取り結果の想定（試作では固定）
+const RCPT_SAMPLE = {store:"DON QUIJOTE", d:"11/03", total:3210, pay:"Card ••4021",
+  items:[["Shampoo refill","Household",1280],["Snacks & drinks","Food",860],["Phone stand","Gadgets",1070]]};
+// Amazon注文履歴スクショから読み取った想定（試作では固定）
+// PayPay取引履歴スクショから読み取った想定（試作では固定）。dir: in=受け取り / out=支払い
+const PP_SAMPLE = [
+  {d:"11/20", who:"Sato",  amt:3200, dir:"in",  msg:"Yakiniku"},
+  {d:"11/16", who:"Ken",   amt:1225, dir:"in",  msg:"Uber Eats"},
+  {d:"11/14", who:"Tanaka",amt:3200, dir:"in",  msg:"Gyukaku"},
+  {d:"11/12", who:"FamilyMart", amt:540, dir:"out", msg:""},
+];
+const AMZ_SAMPLE = [
+  {no:"249-1180", d:"11/21", total:2180, items:[["Kitchen paper ×6","Household",2180]]},
+  {no:"249-0937", d:"11/19", total:4280, items:[["Laundry detergent refill ×2","Household",1280],["USB-C cable 2m","Gadgets",3000]]},
+  {no:"249-0412", d:"11/10", total:12800, items:[["Mechanical keyboard","Gadgets",12800]]},
+];
+// Amexスクショから読み取った想定の行（試作では固定）。st: new=取り込み対象 / dup=シートにある / pend=確定前
+const AMEX_SAMPLE = [
+  {d:"11/21", m:"UBER *TRIP", amt:1980, cat:"Transport", st:"pend"},
+  {d:"11/20", m:"STARBUCKS COFFEE SHIBUYA", amt:620, cat:"Cafe", st:"new"},
+  {d:"11/19", m:"KINOKUNIYA SHINJUKU", amt:2860, cat:"Books", st:"new"},
+  {d:"11/18", m:"MOBILE SUICA", amt:3000, cat:"Transport", st:"new"},
+  {d:"11/09", m:"MUJI GINZA", amt:3490, cat:"Household", st:"dup"},
+];
+
+// via: app=アプリから手入力 / shot=PayPay履歴スクショから取り込み
+let BACKS = [
+  {id:"b1", tx:"t07", who:"Tanaka", amt:3200, method:"paypay", status:"in",   date:"11/14", via:"shot"},
+  {id:"b2", tx:"t07", who:"Sato", amt:3200, method:"cash",   status:"wait", date:"",      via:"app"},
+  {id:"b3", tx:"t11", who:"Mika",   amt:1100, method:"cash",   status:"in",   date:"11/06", via:"app"},
+];
+
+let WISH = [
+  {id:"w1", name:"Leather winter boots", cat:"Clothing", price:18900, prio:"h", on:true, note:"On sale until 12/1"},
+  {id:"w2", name:"Steam humidifier", cat:"Household", price:5900, prio:"m", on:true, note:"On Amazon wishlist"},
+  {id:"w3", name:"Pour-over kettle", cat:"Cafe", price:7480, prio:"l", on:false, note:""},
+  {id:"w4", name:"Paperbacks ×3", cat:"Books", price:2640, prio:"l", on:false, note:"Can wait"},
+];
+
+let filter = "All", cardFilter = "all", showAllBacks = false;
+const CAT_ORDER = ["Food","Gadgets","Clothing","Household","Transport","Cafe","Hobbies","Books","Subscriptions","Other"];
+const txById = id => TX.find(t=>t.id===id);
+const received = t => BACKS.filter(b=>b.tx===t.id && b.status==="in").reduce((a,b)=>a+b.amt,0);
+const pending  = t => BACKS.filter(b=>b.tx===t.id && b.status==="wait").reduce((a,b)=>a+b.amt,0);
+const linesOf = t => (t.splits ? t.splits.map(s=>({cat:s[1], amt:s[2]})) : [{cat:t.cat, amt:t.amt}])
+  .map(l => ({...l, net: l.amt - received(t) * l.amt / t.amt}));  // 受け取り分は内訳に按分
+const short = c => `${CARDS[c].name}${CARDS[c].label.slice(-4)}`;
+
+function render(){
+  const cardTotal = TX.reduce((a,t)=>a+t.amt,0);
+  const backIn = BACKS.filter(b=>b.status==="in").reduce((a,b)=>a+b.amt,0);
+  const backWait = BACKS.filter(b=>b.status==="wait").reduce((a,b)=>a+b.amt,0);
+  const spent = cardTotal - backIn;
+  const plan = WISH.filter(w=>w.on).reduce((a,w)=>a+w.price,0);
+  const free = BUDGET - spent - plan;
+  const ideal = BUDGET * DAY / DAYS;
+  const diff = ideal - spent;
+  const daysLeft = DAYS - DAY + 1;
+
+  // 残り額
+  $("free").textContent = yen(free); $("free").classList.toggle("neg", free < 0);
+  $("miniFree").textContent = yen(free);
+  $("perDay").textContent = yen(Math.max(free,0)/daysLeft);
+  const pill = $("pacePill");
+  if (free < 0){ pill.className="pill bad"; pill.textContent = "Over by "+yen(-free)+" with plans"; }
+  else if (diff < 0){ pill.className="pill bad"; pill.textContent = yen(-diff)+" over pace" + (backWait >= -diff ? " · pending paybacks cover it" : ""); }
+  else { pill.className="pill ok"; pill.textContent = "On pace · "+yen(diff)+" under"; }
+
+  const pct = v => Math.min(v,BUDGET)/BUDGET*100;
+  const sp = pct(spent), pl = Math.max(0, pct(spent+plan) - sp);
+  const over = Math.max(0, spent+plan-BUDGET);
+  Object.assign($("segSpent").style, {width: sp+"%"});
+  Object.assign($("segPlan").style, {left: sp+"%", width: pl+"%"});
+  Object.assign($("segOver").style, {left: (100-over/BUDGET*100)+"%", width: (over/BUDGET*100)+"%"});
+  $("pace").style.left = (ideal/BUDGET*100)+"%";
+  $("lgSpent").textContent = yen(spent);
+  $("lgPlan").textContent = yen(plan);
+  $("lgPace").textContent = (diff>=0?"+":"−") + yen(Math.abs(diff));
+  $("netline").innerHTML = `Card <span class="num">${yen(cardTotal)}</span> − paybacks <b class="num">${yen(backIn)}</b>`
+    + (backWait ? ` · pending <i class="num">${yen(backWait)}</i>` : "");
+
+  // 割り勘
+  const cashIn = BACKS.filter(b=>b.status==="in"&&b.method==="cash").reduce((a,b)=>a+b.amt,0);
+  $("bIn").textContent = yen(backIn);
+  $("bWait").textContent = yen(backWait);
+  $("bSplit").textContent = `Cash ${yen(cashIn)} · PayPay ${yen(backIn-cashIn)}`;
+  const order = [...BACKS].sort((a,b)=>(a.status==="wait"?0:1)-(b.status==="wait"?0:1));
+  const shown = showAllBacks ? order : order.slice(0,3);
+  $("backs").innerHTML = shown.length ? shown.map(b=>{
+    const t = txById(b.tx);
+    const mtag = b.method==="cash" ? `<span class="tag">Cash</span>` : `<span class="tag">PayPay${b.via==="shot"?" · screenshot":""}</span>`;
+    return `<li class="${b.status==="wait"?"pending":""}">
+      <span class="who">${b.who} ${mtag}</span>
+      <span class="link">${short(t.card)} · ${t.d} ${t.m}</span>
+      <span class="right"><span class="num">${b.status==="wait"?"Pending ":"+"}${yen(b.amt)}</span>
+      ${b.status==="wait"?`<button class="btn sm" type="button" data-receive="${b.id}">Mark received</button>`:`<span class="tag">${b.date}</span>`}</span>
+    </li>`}).join("") : `<li class="empty">No paybacks yet</li>`;
+  $("moreBacks").hidden = order.length <= 3;
+  $("moreBacks").textContent = showAllBacks ? "Show less" : `Show all (${order.length})`;
+
+  // 欲しいもの
+  $("wishes").innerHTML = WISH.map(w => `
+    <label class="wish ${w.on?"on":""}">
+      <input type="checkbox" id="${w.id}" ${w.on?"checked":""} data-wish="${w.id}">
+      <div><div class="name">${w.name}<span class="prio ${w.prio}">${{h:"High",m:"Mid",l:"Low"}[w.prio]}</span></div>
+      <div class="meta">${w.cat}${w.note?" · "+w.note:""}</div></div>
+      <span class="num">${yen(w.price)}</span>
+    </label>`).join("");
+  $("wishTotal").textContent = yen(plan);
+  const nextOff = WISH.filter(w=>!w.on).sort((a,b)=>a.price-b.price)[0];
+  $("wishHint").textContent = nextOff
+    ? (free - nextOff.price >= 0 ? `Add “${nextOff.name}” and ${yen(free-nextOff.price)} remains` : `Add “${nextOff.name}” and you go ${yen(nextOff.price-free)} over`)
+    : "";
+
+  // カテゴリ（実質）
+  const byCat = {}; CAT_ORDER.forEach(c=>byCat[c]={s:0,p:0});
+  TX.flatMap(linesOf).forEach(l=>byCat[l.cat].s+=l.net);
+  WISH.filter(w=>w.on).forEach(w=>byCat[w.cat].p+=w.price);
+  const max = Math.max(...CAT_ORDER.map(c=>byCat[c].s+byCat[c].p));
+  $("cats").innerHTML = CAT_ORDER.filter(c=>byCat[c].s+byCat[c].p>0)
+    .sort((a,b)=>(byCat[b].s+byCat[b].p)-(byCat[a].s+byCat[a].p))
+    .map(c=>{const v=byCat[c]; return `<button class="cat ${filter===c?"active":""}" data-cat="${c}" data-jump="1">
+      <span>${c}</span><span class="bar2"><i style="width:${v.s/max*100}%"></i><i class="p" style="width:${v.p/max*100}%"></i></span>
+      <span class="num">${yen(v.s)}${v.p?`<br><small>+${yen(v.p)}</small>`:""}</span></button>`}).join("");
+
+  // 明細
+  $("mOk").textContent = TX.filter(t=>t.st==="ok"&&t.src.includes("rcp")).length;
+  $("mSplit").textContent = TX.filter(t=>t.st==="fill").length;
+  $("mMiss").textContent = TX.filter(t=>t.st==="miss").length;
+  $("cardFilters").innerHTML = [["all","All cards"], ...Object.keys(CARDS).map(k=>[k, short(k)])]
+    .map(([k,l])=>`<button class="chip" aria-pressed="${cardFilter===k}" data-card="${k}">${l}</button>`).join("");
+  $("filters").innerHTML = ["All", ...CAT_ORDER.filter(c=>byCat[c].s>0)]
+    .map(c=>`<button class="chip" aria-pressed="${filter===c}" data-cat="${c}">${c}</button>`).join("");
+
+  const rows = TX.filter(t => (cardFilter==="all" || t.card===cardFilter)
+    && (filter==="All" || (t.splits ? t.splits.some(s=>s[1]===filter) : t.cat===filter)));
+  const stLabel = {ok:["ok","Matched"], fill:["fill","Itemized"], miss:["miss","Needs receipt"]};
+  const srcLabel = {amz:["amz","Amazon"], rcp:["rcp","Receipt"], amx:["amx","Amex sheet"]};
+  $("tx").innerHTML = rows.length ? rows.map(t=>{
+    const st = (t.st==="miss" && /AMAZON/.test(t.m)) ? ["miss","Needs order"] : stLabel[t.st], r = received(t);
+    const tags = `<span class="tag card">${short(t.card)}</span>`
+      + t.src.map(s=>`<span class="tag ${srcLabel[s][0]}">${srcLabel[s][1]}</span>`).join("")
+      + (t.cat?`<span class="tag">${t.cat}</span>`:"") + (t.note?`<span class="tag">${t.note}</span>`:"")
+      + `<span class="st ${st[0]}">${st[1]}</span>`;
+    const splits = t.splits ? `<div class="splits">${t.splits.map(s=>`<div><span>${s[0]} · <em>${s[1]}</em></span><span class="num">${yen(s[2])}</span></div>`).join("")}</div>` : "";
+    const bk = BACKS.filter(b=>b.tx===t.id);
+    const backs = bk.length ? `<div class="splits back">${bk.map(b=>`<div><span>Split · ${b.who} (${b.method==="cash"?"Cash":"PayPay"})</span><span class="num ${b.status==="in"?"in":"wait"}">${b.status==="in"?"−"+yen(b.amt):"Pending "+yen(b.amt)}</span></div>`).join("")}</div>` : "";
+    const amt = r ? `<s>${yen(t.amt)}</s>${yen(t.amt-r)}` : yen(t.amt);
+    return `<li><span class="d num">${t.d}</span><div><div class="m">${t.m}</div><div class="tags">${tags}</div></div><span class="amt num">${amt}</span>${splits}${backs}</li>`;
+  }).join("") : `<li class="empty">No charges match</li>`;
+  const sum = rows.flatMap(linesOf).filter(l=>filter==="All"||l.cat===filter).reduce((a,l)=>a+l.net,0);
+  $("txCount").textContent = `${rows.length} charges · net${filter!=="All"?" ("+filter+")":""}`;
+  $("txSum").textContent = yen(sum);
+}
+
+// トースト
+let toastTimer;
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.hidden=true, 3200); }
+
+// ボトムシート
+function fillTxSelect(){
+  const card = $("fCard").value;
+  $("fTx").innerHTML = TX.filter(t=>t.card===card).map(t=>{
+    const left = t.amt - received(t) - pending(t);
+    return `<option value="${t.id}">${t.d} ${t.m} ${yen(t.amt)}${left<t.amt?` (${yen(left)} left)`:""}</option>`}).join("");
+  updatePreview();
+}
+function updatePreview(){
+  const t = txById($("fTx").value), a = Math.round(+$("fAmt").value || 0);
+  $("fErr").textContent = "";
+  $("fDate").disabled = $("fPending").checked;
+  if (!t || !a){ $("fPreview").textContent = ""; return; }
+  $("fPreview").innerHTML = $("fPending").checked
+    ? `Adds <b class="num">${yen(a)}</b> to pending. Net spend stays the same until it arrives`
+    : `${t.m} net <b class="num">${yen(t.amt-received(t))}</b> → <b class="num">${yen(t.amt-received(t)-a)}</b>`;
+}
+function closeAll(){
+  ["sheet","amexSheet","amzSheet","ppSheet","rcptSheet","scrim","menu"].forEach(id=>$(id).hidden=true);
+  $("openForm").hidden=false; $("openForm").setAttribute("aria-expanded","false");
+  document.body.style.overflow="";
+}
+function toggleMenu(open){
+  $("menu").hidden = !open; $("scrim").hidden = !open;
+  $("openForm").setAttribute("aria-expanded", String(open));
+  if (open) $("goAmex").focus();
+}
+function openSheet(show){
+  if (!show) return closeAll();
+  $("menu").hidden = true;
+  $("sheet").hidden = $("scrim").hidden = false;
+  $("openForm").hidden = true;
+  document.body.style.overflow = show ? "hidden" : "";
+  if (show){
+    $("fCard").innerHTML = Object.entries(CARDS).map(([k,c])=>`<option value="${k}">${c.name} ${c.label}</option>`).join("");
+    const names = [...new Set(BACKS.map(b=>b.who))];
+    $("whoQuick").innerHTML = names.map(n=>`<button type="button" data-who="${n}">${n}</button>`).join("");
+    fillTxSelect(); $("fAmt").focus();
+  }
+}
+$("openForm").addEventListener("click", ()=>toggleMenu($("menu").hidden));
+$("goBack").addEventListener("click", ()=>openSheet(true));
+$("goAmex").addEventListener("click", ()=>openAmex());
+$("goAmz").addEventListener("click", ()=>openAmz());
+$("goPP").addEventListener("click", ()=>openPP());
+
+// PayPay取り込み：履歴スクショ → 受け取りを読む → 回収待ちと照合 or 新規の割り勘としてカード明細にひもづけ
+let ppRows = [], ppShots = [];
+function ppStep(step){
+  $("ppPick").style.display = step==="pick" ? "grid" : "none";
+  $("ppReading").hidden = step!=="reading";
+  $("ppReview").hidden = step!=="review"; $("ppReview").style.display = step==="review" ? "grid" : "none";
+}
+function openPP(){
+  $("menu").hidden = true; $("ppSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true;
+  document.body.style.overflow = "hidden"; ppStep("pick"); $("ppFile").value = "";
+}
+function guessTx(r){
+  const words = r.msg.toUpperCase().split(/\s+/).filter(w=>w.length>2);
+  const byMsg = TX.find(t=>words.some(w=>t.m.replace(/[^A-Z]/g,"").includes(w.replace(/[^A-Z]/g,""))));
+  return (byMsg || TX.find(t=>t.amt > r.amt) || TX[0]).id;
+}
+function readPP(shots){
+  ppShots = shots; ppStep("reading");
+  $("ppReadingText").textContent = `Reading ${shots.length} screenshot${shots.length>1?"s":""}…`;
+  setTimeout(()=>{
+    ppRows = PP_SAMPLE.map((r,i)=>{
+      if (r.dir==="out") return {...r, i, st:"out", on:false};
+      if (BACKS.some(b=>b.who===r.who && b.amt===r.amt && b.status==="in" && b.method==="paypay")) return {...r, i, st:"dup", on:false};
+      const wait = BACKS.find(b=>b.who===r.who && b.amt===r.amt && b.status==="wait");
+      if (wait) return {...r, i, st:"settle", back:wait, on:true};
+      return {...r, i, st:"new", tx:guessTx(r), on:true};
+    });
+    renderPP(); ppStep("review");
+  }, 1100);
+}
+function renderPP(){
+  $("ppShots").innerHTML = ppShots.map(s=>`<div class="shot" style="${s.url?`background-image:url(${s.url})`:""}">${s.url?"":s.name}</div>`).join("");
+  const why = {dup:"Already logged · skipped", out:"Payment you made · not a payback"};
+  $("ppRows").innerHTML = ppRows.map(r=>{
+    const t = r.back ? txById(r.back.tx) : null;
+    const body = r.st==="settle" ? `<div class="mt">Settles pending payback · <b>${short(t.card)} · ${t.d} ${t.m}</b></div>`
+      : r.st==="new" ? `<div class="mt">${r.msg?`“${r.msg}” · `:""}Pick the charge it splits</div>
+          <select data-ptx="${r.i}" aria-label="Charge for ${r.who}" style="font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:0;min-height:40px;padding:0 8px;min-width:0">
+          ${TX.map(x=>`<option value="${x.id}" ${x.id===r.tx?"selected":""}>${short(x.card)} · ${x.d} ${x.m} ${yen(x.amt)}</option>`).join("")}</select>`
+      : `<div class="mt">${why[r.st]}</div>`;
+    return `<div class="order ${r.on?"on":""} ${r.st==="dup"||r.st==="out"?"skip":""}">
+      <div class="oh"><input type="checkbox" data-pp="${r.i}" ${r.on?"checked":""} ${r.st==="dup"||r.st==="out"?"disabled":""} aria-label="Log ${r.who}">
+        <span class="t">${r.dir==="in"?"From":"To"} ${r.who} · <span class="num">${r.d}</span></span><span class="num">${r.dir==="in"?"+":"−"}${yen(r.amt)}</span></div>
+      ${body}</div>`;
+  }).join("");
+  const pick = ppRows.filter(r=>r.on);
+  $("ppCount").textContent = `${pick.length} of ${ppRows.length} rows selected`;
+  $("ppTotal").textContent = yen(pick.reduce((a,r)=>a+r.amt,0));
+  $("ppAdd").disabled = !pick.length;
+  $("ppAdd").textContent = pick.length ? `Log ${pick.length} payback${pick.length>1?"s":""}` : "Nothing to log";
+}
+$("ppFile").addEventListener("change", e=>{
+  const files = [...e.target.files]; if (!files.length) return;
+  readPP(files.map(f=>({name:f.name, url:URL.createObjectURL(f)})));
+});
+$("ppSample").addEventListener("click", ()=>readPP([{name:"IMG_2063"}]));
+$("ppRows").addEventListener("change", e=>{
+  const a = e.target.dataset;
+  if (a.pp!==undefined){ ppRows[+a.pp].on = e.target.checked; renderPP(); }
+  if (a.ptx!==undefined){ ppRows[+a.ptx].tx = e.target.value; }
+});
+$("ppAdd").addEventListener("click", ()=>{
+  const pick = ppRows.filter(r=>r.on);
+  pick.forEach(r=>{
+    if (r.st==="settle"){ Object.assign(r.back, {status:"in", method:"paypay", date:r.d, via:"shot"}); }
+    else BACKS.push({id:"b"+Date.now()+r.i, tx:r.tx, who:r.who, amt:r.amt, method:"paypay", status:"in", date:r.d, via:"shot"});
+  });
+  $("ppSync").textContent = "just now";
+  closeAll(); render();
+  toast(`Logged ${pick.length} PayPay payback${pick.length>1?"s":""} · ${yen(pick.reduce((a,r)=>a+r.amt,0))}`);
+});
+
+// Amazon取り込み：注文履歴スクショ → 注文と品目を読む → カードのAMAZON明細と合計額で突合 → 品目で分割
+let amzOrders = [], amzShots = [];
+function amzStep(step){
+  $("amzPick").style.display = step==="pick" ? "grid" : "none";
+  $("amzReading").hidden = step!=="reading";
+  $("amzReview").hidden = step!=="review"; $("amzReview").style.display = step==="review" ? "grid" : "none";
+}
+function openAmz(){
+  $("menu").hidden = true; $("amzSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true;
+  document.body.style.overflow = "hidden"; amzStep("pick"); $("amzFile").value = "";
+}
+function readAmz(shots){
+  amzShots = shots; amzStep("reading");
+  $("amzReadingText").textContent = `Reading ${shots.length} screenshot${shots.length>1?"s":""}…`;
+  setTimeout(()=>{
+    const md = d => { const [m,dd]=d.split("/"); return +m*31 + +dd; };
+    amzOrders = AMZ_SAMPLE.map((o,i)=>{
+      const tx = TX.find(t=>/AMAZON/.test(t.m) && t.amt===o.total && Math.abs(md(t.d)-md(o.d))<=3);
+      const st = !tx ? "nocharge" : tx.src.includes("amz") ? "done" : "new";
+      return {...o, i, items:o.items.map(x=>[...x]), tx, st, on: st==="new"};
+    });
+    renderAmz(); amzStep("review");
+  }, 1100);
+}
+function renderAmz(){
+  $("amzShots").innerHTML = amzShots.map(s=>`<div class="shot" style="${s.url?`background-image:url(${s.url})`:""}">${s.url?"":s.name}</div>`).join("");
+  const why = {done:"Already split · skipped", nocharge:"No card charge yet · import again after it posts"};
+  $("amzOrders").innerHTML = amzOrders.map(o=>`<div class="order ${o.on?"on":""} ${o.st!=="new"?"skip":""}">
+    <div class="oh"><input type="checkbox" data-aord="${o.i}" ${o.on?"checked":""} ${o.st!=="new"?"disabled":""} aria-label="Split order ${o.no}">
+      <span class="t">Order ${o.no} · <span class="num">${o.d}</span></span><span class="num">${yen(o.total)}</span></div>
+    <div class="mt">${o.st==="new" ? `Matches <b>${short(o.tx.card)} · ${o.tx.d} AMAZON.CO.JP ${yen(o.tx.amt)}</b>` : why[o.st]}</div>
+    ${o.st==="new" ? `<ul class="rows">${o.items.map((it,k)=>`<li><span class="m">${it[0]}</span><span class="amt num">${yen(it[2])}</span>
+      <select data-aitem="${o.i}-${k}" aria-label="Category for ${it[0]}">${CAT_ORDER.map(c=>`<option ${c===it[1]?"selected":""}>${c}</option>`).join("")}</select></li>`).join("")}</ul>` : ""}
+  </div>`).join("");
+  const pick = amzOrders.filter(o=>o.on);
+  $("amzCount").textContent = `${pick.length} of ${amzOrders.length} orders selected`;
+  $("amzTotal").textContent = yen(pick.reduce((a,o)=>a+o.total,0));
+  $("amzAdd").disabled = !pick.length;
+  $("amzAdd").textContent = pick.length ? `Split ${pick.length} charge${pick.length>1?"s":""}` : "Nothing to split";
+}
+$("amzFile").addEventListener("change", e=>{
+  const files = [...e.target.files]; if (!files.length) return;
+  readAmz(files.map(f=>({name:f.name, url:URL.createObjectURL(f)})));
+});
+$("amzSample").addEventListener("click", ()=>readAmz([{name:"IMG_2050"}]));
+$("amzOrders").addEventListener("change", e=>{
+  const a = e.target.dataset;
+  if (a.aord!==undefined){ amzOrders[+a.aord].on = e.target.checked; renderAmz(); }
+  if (a.aitem!==undefined){ const [o,k] = a.aitem.split("-").map(Number); amzOrders[o].items[k][1] = e.target.value; }
+});
+$("amzAdd").addEventListener("click", ()=>{
+  const pick = amzOrders.filter(o=>o.on);
+  pick.forEach(o=>{ const t = o.tx; t.splits = o.items.map(x=>[...x]); delete t.cat; t.src = [...new Set([...t.src,"amz"])]; t.st = "fill"; });
+  $("amzSync").textContent = "just now";
+  closeAll(); render();
+  toast(`Split ${pick.length} Amazon charge${pick.length>1?"s":""} into ${pick.reduce((a,o)=>a+o.items.length,0)} items`);
+});
+$("goRcpt").addEventListener("click", ()=>openRcpt());
+
+// レシート登録：撮影 or ライブラリ → 読み取り → カード明細と突合 → 保存
+let rcpt = null, rcptMatchTx = null;
+function rcptStep(step){
+  $("rcptPick").style.display = step==="pick" ? "grid" : "none";
+  $("rcptReading").hidden = step!=="reading";
+  $("rcptReview").hidden = step!=="review"; $("rcptReview").style.display = step==="review" ? "grid" : "none";
+}
+function openRcpt(){
+  $("menu").hidden = true; $("rcptSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true;
+  document.body.style.overflow = "hidden"; rcptStep("pick"); $("rcptCam").value = $("rcptLib").value = "";
+}
+function readRcpt(url){
+  rcptStep("reading");
+  setTimeout(()=>{
+    rcpt = {...RCPT_SAMPLE, items: RCPT_SAMPLE.items.map(i=>[...i]), url};
+    // 同じ金額で、日付が前後3日以内のカード明細を候補にする
+    const md = d => { const [m,dd]=d.split("/"); return +m*31 + +dd; };
+    rcptMatchTx = TX.find(t=>t.amt===rcpt.total && Math.abs(md(t.d)-md(rcpt.d))<=3 && !t.src.includes("rcp")) || null;
+    $("rcptShot").style.backgroundImage = url ? `url(${url})` : "";
+    $("rcptShot").textContent = url ? "" : "SAMPLE";
+    $("rcptKv").innerHTML = `<dt>Store</dt><dd>${rcpt.store}</dd><dt>Date</dt><dd class="num">${rcpt.d}</dd><dt>Total</dt><dd class="num">${yen(rcpt.total)}</dd><dt>Paid</dt><dd>${rcpt.pay}</dd>`;
+    $("rcptMatch").innerHTML = rcptMatchTx
+      ? `<small>MATCHED CARD CHARGE</small><span>${short(rcptMatchTx.card)} · ${rcptMatchTx.d} ${rcptMatchTx.m}</span><span class="num">${yen(rcptMatchTx.amt)} · same amount</span>`
+      : `<small>NO MATCHING CHARGE</small><span>Saved as a receipt only. It will match when the card charge comes in.</span>`;
+    $("rcptRows").innerHTML = rcpt.items.map((it,i)=>`<li style="grid-template-columns:minmax(0,1fr) auto">
+      <span class="m">${it[0]}</span><span class="amt num">${yen(it[2])}</span>
+      <select data-rcat="${i}" style="grid-column:1 / 3" aria-label="Category for ${it[0]}">${CAT_ORDER.map(c=>`<option ${c===it[1]?"selected":""}>${c}</option>`).join("")}</select></li>`).join("");
+    rcptStep("review");
+  }, 1100);
+}
+["rcptCam","rcptLib"].forEach(id=>$(id).addEventListener("change", e=>{
+  const f = e.target.files[0]; if (f) readRcpt(URL.createObjectURL(f));
+}));
+$("rcptSample").addEventListener("click", ()=>readRcpt(""));
+$("rcptRows").addEventListener("change", e=>{ const i = e.target.dataset.rcat; if (i!==undefined) rcpt.items[+i][1] = e.target.value; });
+$("rcptSave").addEventListener("click", ()=>{
+  if (rcptMatchTx){
+    const t = rcptMatchTx;
+    t.src = [...new Set([...t.src, "rcp"])];
+    const cats = new Set(rcpt.items.map(i=>i[1]));
+    if (cats.size > 1){ t.splits = rcpt.items.map(i=>[...i]); delete t.cat; t.st = "fill"; }
+    else { t.cat = [...cats][0]; t.st = "ok"; }
+  }
+  $("rcptCount").textContent = +$("rcptCount").textContent + 1;
+  closeAll(); render();
+  toast(rcptMatchTx ? `Receipt matched to ${rcptMatchTx.m} · ${rcpt.items.length} items` : "Receipt saved");
+});
+$("cancelForm").addEventListener("click", closeAll);
+$("scrim").addEventListener("click", closeAll);
+document.addEventListener("click", e=>{ if (e.target.closest("[data-close]")) closeAll(); });
+
+// Amex取り込み：スクショ → 読み取り → 確認 → シートへ追加
+let amexRows = [], amexShots = [];
+function amexStep(step){
+  $("amexPick").hidden = step!=="pick"; $("amexReading").hidden = step!=="reading"; $("amexReview").hidden = step!=="review";
+  $("amexPick").style.display = step==="pick" ? "grid" : "none";
+  $("amexReview").style.display = step==="review" ? "grid" : "none";
+}
+function openAmex(){
+  $("menu").hidden = true; $("amexSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true;
+  document.body.style.overflow = "hidden"; amexStep("pick"); $("amexFile").value = "";
+}
+function readShots(shots){
+  amexShots = shots; amexStep("reading");
+  $("amexReadingText").textContent = `Reading ${shots.length} screenshot${shots.length>1?"s":""}…`;
+  setTimeout(()=>{
+    const have = new Set(TX.filter(t=>t.card==="amex").map(t=>t.d+t.m+t.amt));
+    amexRows = AMEX_SAMPLE.map((r,i)=>({...r, i, st: r.st==="pend" ? "pend" : have.has(r.d+r.m+r.amt) ? "dup" : "new"}))
+      .map(r=>({...r, on: r.st==="new"}));
+    renderAmex(); amexStep("review");
+  }, 1100);
+}
+function renderAmex(){
+  $("amexShots").innerHTML = amexShots.map(s=>`<div class="shot" style="${s.url?`background-image:url(${s.url})`:""}">${s.url?"":s.name}</div>`).join("");
+  const why = {dup:"Already in the sheet · skipped", pend:"Pending charge · import after it posts"};
+  $("amexRows").innerHTML = amexRows.map(r=>`<li class="${r.st!=="new"?"skip":""}">
+    <input type="checkbox" data-arow="${r.i}" ${r.on?"checked":""} ${r.st!=="new"?"disabled":""} aria-label="Import ${r.m}">
+    <span class="num" style="font-size:12px">${r.d}</span><span class="m">${r.m}</span><span class="amt num">${yen(r.amt)}</span>
+    ${r.st==="new" ? `<select data-acat="${r.i}" aria-label="Category for ${r.m}">${CAT_ORDER.map(c=>`<option ${c===r.cat?"selected":""}>${c}</option>`).join("")}</select>` : `<span class="why">${why[r.st]}</span>`}
+  </li>`).join("");
+  const pick = amexRows.filter(r=>r.on);
+  $("amexCount").textContent = `${pick.length} of ${amexRows.length} rows selected`;
+  $("amexTotal").textContent = yen(pick.reduce((a,r)=>a+r.amt,0));
+  $("amexAdd").disabled = !pick.length;
+  $("amexAdd").textContent = pick.length ? `Add ${pick.length} to sheet` : "Nothing to add";
+}
+$("amexFile").addEventListener("change", e=>{
+  const files = [...e.target.files]; if (!files.length) return;
+  readShots(files.map(f=>({name:f.name, url:URL.createObjectURL(f)})));
+});
+$("amexSample").addEventListener("click", ()=>readShots([{name:"IMG_2041"},{name:"IMG_2042"}]));
+$("amexRows").addEventListener("change", e=>{
+  const a = e.target.dataset;
+  if (a.arow!==undefined){ amexRows[+a.arow].on = e.target.checked; renderAmex(); }
+  if (a.acat!==undefined){ amexRows[+a.acat].cat = e.target.value; }
+});
+$("amexAdd").addEventListener("click", ()=>{
+  const pick = amexRows.filter(r=>r.on);
+  pick.forEach((r,k)=>TX.push({id:"a"+Date.now()+k, d:r.d, card:"amex", m:r.m, amt:r.amt, src:["amx"], st:"ok", cat:r.cat}));
+  const key = d => { const [m,dd]=d.split("/"); return +m*100 + +dd; };
+  TX.sort((a,b)=>key(b.d)-key(a.d));
+  $("amexSync").textContent = "just now";
+  closeAll(); render();
+  toast(`Added ${pick.length} Amex charges · ${yen(pick.reduce((a,r)=>a+r.amt,0))}`);
+});
+$("fCard").addEventListener("change", fillTxSelect);
+["fTx","fAmt","fPending"].forEach(id=>$(id).addEventListener("input", updatePreview));
+$("whoQuick").addEventListener("click", e=>{ const b=e.target.closest("[data-who]"); if(b){ $("fWho").value=b.dataset.who; } });
+$("addForm").addEventListener("submit", e=>{
+  e.preventDefault();
+  const who = $("fWho").value.trim(), amt = Math.round(+$("fAmt").value || 0), t = txById($("fTx").value);
+  const left = t.amt - received(t) - pending(t);
+  if (amt <= 0) return $("fErr").textContent = "Enter an amount of ¥1 or more";
+  if (!who) return $("fErr").textContent = "Enter who paid you back";
+  if (amt > left) return $("fErr").textContent = `Only ${yen(left)} of this charge is left to split`;
+  const [ , mm, dd] = $("fDate").value.split("-");
+  const pend = $("fPending").checked;
+  BACKS.push({id:"b"+Date.now(), tx:t.id, who, amt,
+    method: document.querySelector('input[name="method"]:checked').value,
+    status: pend ? "wait" : "in", date: pend ? "" : `${+mm}/${+dd}`, via:"app"});
+  $("addForm").reset(); $("fDate").value = "2026-11-20";
+  closeAll(); render();
+  toast(`Saved ${yen(amt)} from ${who}${pend?" as pending":""}`);
+});
+
+document.addEventListener("change", e => {
+  const id = e.target.dataset && e.target.dataset.wish;
+  if (id){ WISH = WISH.map(w => w.id===id ? {...w, on:e.target.checked} : w); render(); $(id)?.focus(); }
+});
+document.addEventListener("click", e => {
+  const c = e.target.closest("[data-cat]");
+  if (c){ const v = c.dataset.cat; filter = (filter===v && v!=="All") ? "All" : v; render();
+    if (c.dataset.jump) $("txCard").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion:reduce)").matches ? "auto" : "smooth"});
+    return; }
+  const k = e.target.closest("[data-card]");
+  if (k){ cardFilter = k.dataset.card; render(); return; }
+  const r = e.target.closest("[data-receive]");
+  if (r){ const b = BACKS.find(x=>x.id===r.dataset.receive); b.status="in"; b.date="11/20"; render(); toast(`Marked ${yen(b.amt)} from ${b.who} as received`); return; }
+  if (e.target.id==="moreBacks"){ showAllBacks = !showAllBacks; render(); }
+});
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeAll(); });
+addEventListener("scroll", ()=>$("bar").classList.toggle("stuck", scrollY > 140), {passive:true});
+// フォント×カラーの組み合わせ（各2色）。#style-<id> で直接開ける
+const STYLES = {
+  night:    {name:"Night",     font:"Manrope / Space Grotesk", sans:'"Manrope"', num:'"Space Grotesk"', skin:"night",
+             light:["#e8ecf4","#3fe0d0","#1b2131"], dark:["#e8ecf4","#3fe0d0","#1b2131"], bg:"#121620", money:"#d4f04a"},
+  ledger:   {name:"Ledger",    font:"Plex Sans / Plex Mono",   sans:'"IBM Plex Sans"', num:'"IBM Plex Mono"',
+             light:["#121a16","#0e6b57","#ffffff"], dark:["#e6ede9","#52c3a3","#0e1411"]},
+  cobalt:   {name:"Cobalt",    font:"Space Grotesk / JetBrains Mono", sans:'"Space Grotesk"', num:'"JetBrains Mono"',
+             light:["#141826","#2f45c8","#ffffff"], dark:["#e7e9f2","#8d9cff","#0f121c"]},
+  persimmon:{name:"Persimmon", font:"DM Sans / DM Mono",       sans:'"DM Sans"', num:'"DM Mono"',
+             light:["#1e1916","#b23c0a","#ffffff"], dark:["#f1ebe7","#f0915e","#171210"]},
+  receipt:  {name:"Receipt",   font:"Work Sans / Space Mono",  sans:'"Work Sans"', num:'"Space Mono"',
+             light:["#1a1a1a","#7a5c00","#fbfbf8"], dark:["#ececea","#e0b84a","#141414"]},
+  shu:      {name:"Shu",       font:"Zen Kaku Gothic / Roboto Mono", sans:'"Zen Kaku Gothic New"', num:'"Roboto Mono"',
+             light:["#1c1c1f","#c0182c","#ffffff"], dark:["#ececef","#ff7282","#141417"]},
+};
+let styleId = "night";
+try { styleId = localStorage.getItem("mf-style") || styleId; } catch(e){}
+const fromHash = location.hash.replace("#style-","");
+if (STYLES[fromHash]) styleId = fromHash;
+const isDark = () => { const t = document.documentElement.dataset.theme; return t ? t==="dark" : matchMedia("(prefers-color-scheme: dark)").matches; };
+function applyStyle(){
+  const st = STYLES[styleId], [ink, accent, paper] = st[isDark() ? "dark" : "light"], r = document.documentElement.style;
+  r.setProperty("--ink", ink); r.setProperty("--accent", accent); r.setProperty("--paper", paper);
+  r.setProperty("--font-jp", `${st.sans}, "Zen Kaku Gothic New", system-ui, -apple-system, "Hiragino Sans", sans-serif`);
+  r.setProperty("--font-num", `${st.num}, ui-monospace, SFMono-Regular, Menlo, monospace`);
+  document.documentElement.classList.toggle("skin-night", st.skin==="night");
+  if (st.bg) r.setProperty("--bg", st.bg); else r.removeProperty("--bg");
+  r.colorScheme = st.skin==="night" ? "dark" : "";
+  $("styles").innerHTML = Object.entries(STYLES).map(([id,x])=>{ const c = x[isDark()?"dark":"light"];
+    return `<button class="sty" type="button" data-style="${id}" aria-pressed="${id===styleId}">
+      <span class="sw"><i style="background:${x.skin?c[2]:c[0]}"></i><i style="background:${c[1]}"></i>${x.money?`<i style="background:${x.money}"></i>`:""}</span>
+      <b style="font-family:${x.sans.replace(/"/g,"'")},sans-serif">${x.name}</b><small>${x.font}</small></button>`; }).join("");
+}
+$("nightAdd").addEventListener("click", ()=>toggleMenu(true));
+$("nightHero").addEventListener("click", e=>{
+  const b = e.target.closest("[data-goto]"); if (!b) return;
+  $("nightHero").querySelectorAll("[data-goto]").forEach(x=>x.setAttribute("aria-current", String(x===b)));
+  document.querySelector(`section[aria-label="${b.dataset.goto}"]`)?.scrollIntoView({behavior: matchMedia("(prefers-reduced-motion:reduce)").matches ? "auto" : "smooth"});
+});
+$("styles").addEventListener("click", e=>{
+  const b = e.target.closest("[data-style]"); if (!b) return;
+  styleId = b.dataset.style; applyStyle();
+  try { localStorage.setItem("mf-style", styleId); } catch(e){}
+  try { history.replaceState(null, "", "#style-"+styleId); } catch(e){}
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyStyle);
+new MutationObserver(applyStyle).observe(document.documentElement, {attributes:true, attributeFilter:["data-theme"]});
+applyStyle();
+render();
+</script>
+
+<script>if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(()=>{}));</script>
+</body>
+</html>
