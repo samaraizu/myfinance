@@ -1,7 +1,7 @@
 <title>myfinance Wallet</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&family=Work+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&family=Roboto+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&family=Work+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&family=Roboto+Mono:wght@400;500;600&family=Manrope:wght@400;500;700;800&display=swap">
 <style>
 /* Layout: phone-only single column. Left to spend → paybacks → wishlist → categories → charges. ＋ button opens a bottom sheet to log a payback */
 /* Color: 2色だけ。墨（--ink）とみどり（--accent）。灰色・薄い面はすべてこの2色を紙色に混ぜて作る */
@@ -42,6 +42,39 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .mini{font-size:12px;color:var(--muted);text-align:right;opacity:0;transition:opacity .2s}
 .bar.stuck .mini{opacity:1}
 .mini b{font-family:var(--font-num);font-size:15px;color:var(--ink);font-weight:600}
+/* Night skin：濃紺のカード＋シアン＋ライムの金額、角丸、ヒーロー帯 */
+.night-hero{display:none}
+.skin-night{--money:#d4f04a; color-scheme:dark}
+.skin-night body{background:var(--bg)}
+.skin-night .night-hero{display:grid;gap:14px;justify-items:center;text-align:center;margin:0 -16px;padding:28px 16px 0;
+  background:
+    radial-gradient(120% 90% at 78% 0%, color-mix(in srgb,var(--accent) 30%,transparent), transparent 62%),
+    radial-gradient(90% 70% at 0% 100%, color-mix(in srgb,var(--money) 14%,transparent), transparent 60%),
+    repeating-linear-gradient(-28deg, color-mix(in srgb,var(--ink) 5%,transparent) 0 1px, transparent 1px 22px),
+    linear-gradient(180deg, color-mix(in srgb,var(--paper) 70%,var(--ink) 30%), var(--bg))}
+.night-hero h2{margin:0;font-size:28px;font-weight:800;letter-spacing:.02em;line-height:1.1}
+.night-hero p{margin:-8px 0 0;font-size:15px;color:var(--muted)}
+.night-hero .pillbtn{font:inherit;font-size:14px;font-weight:700;color:var(--paper);background:var(--accent);border:0;border-radius:999px;min-height:40px;padding:0 22px;cursor:pointer;
+  box-shadow:12px 0 0 -3px color-mix(in srgb,var(--accent) 45%,transparent),22px 0 0 -7px color-mix(in srgb,var(--accent) 22%,transparent)}
+.night-hero nav{display:flex;align-items:flex-end;gap:4px;width:100%;justify-content:space-between;padding:0 4px}
+.night-hero nav button{font:inherit;font-size:13px;color:var(--muted);background:none;border:0;border-bottom:2px solid transparent;min-height:44px;padding:0 6px;cursor:pointer}
+.night-hero nav button[aria-current="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.night-hero nav .dots{color:var(--ink);letter-spacing:2px;font-weight:800;padding-bottom:12px}
+.skin-night .card{border:0;border-radius:12px;background:var(--paper);box-shadow:0 12px 28px color-mix(in srgb,#000 40%,transparent)}
+.skin-night .free,.skin-night .tx .amt,.skin-night .wish .num,.skin-night .backs .num,.skin-night .legend .num,.skin-night .back-sum .num,.skin-night .perday b,.skin-night .mini b,.skin-night .rows .amt,.skin-night .order .oh .num{color:var(--money)}
+.skin-night .free.neg{color:var(--money)}
+.skin-night .meter,.skin-night .meter .seg.spent{border-radius:999px}
+.skin-night .meter{overflow:visible}
+.skin-night .btn,.skin-night .chip,.skin-night .pill,.skin-night .src,.skin-night .sty,.skin-night .match span{border-radius:999px}
+.skin-night .back-sum div,.skin-night .netline,.skin-night .wish,.skin-night .backs li,.skin-night .order,.skin-night .matchbox,.skin-night .drop,.skin-night .pick2 label,.skin-night .field input,.skin-night .field select,.skin-night .seg-ctl label,.skin-night .rows select,.skin-night .menu,.skin-night .tag,.skin-night .st{border-radius:10px}
+.skin-night .tag,.skin-night .st{border-radius:6px}
+.skin-night .menu button:first-child{border-radius:10px 10px 0 0}
+.skin-night .sheet{border-radius:20px 20px 0 0}
+.skin-night .fab{border-radius:50%;box-shadow:-14px 0 0 -3px color-mix(in srgb,var(--accent) 45%,transparent),-26px 0 0 -8px color-mix(in srgb,var(--accent) 22%,transparent)}
+.skin-night .fab[aria-expanded="true"]{background:var(--accent)}
+.skin-night .toast{border-radius:999px}
+.skin-night .bar{height:0;padding:0;overflow:hidden;background:var(--paper);margin:0 -16px;padding-inline:16px}
+.skin-night .bar.stuck{height:auto;padding-block:12px 8px;overflow:visible}
 /* スタイル切り替え（試作用） */
 .styles{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
 .styles::-webkit-scrollbar{display:none}
@@ -283,6 +316,19 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <h1>November<small><span class="num">11</span> days left</small></h1>
     <div class="mini">Free to spend <b id="miniFree"></b></div>
   </header>
+
+  <div class="night-hero" id="nightHero">
+    <h2>November</h2>
+    <p>Budget ¥100,000 · 11 days left</p>
+    <button class="pillbtn" type="button" id="nightAdd">＋ Add</button>
+    <nav aria-label="Sections">
+      <button type="button" aria-current="true" data-goto="Budget">Overview</button>
+      <button type="button" data-goto="Paybacks">Paybacks</button>
+      <button type="button" data-goto="Wishlist">Wishlist</button>
+      <button type="button" data-goto="Charges">Charges</button>
+      <span class="dots" aria-hidden="true">•••</span>
+    </nav>
+  </div>
 
   <div class="styles" id="styles" aria-label="Font and color style"></div>
   <div class="sync">
@@ -1016,6 +1062,8 @@ document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeAll(); });
 addEventListener("scroll", ()=>$("bar").classList.toggle("stuck", scrollY > 140), {passive:true});
 // フォント×カラーの組み合わせ（各2色）。#style-<id> で直接開ける
 const STYLES = {
+  night:    {name:"Night",     font:"Manrope / Space Grotesk", sans:'"Manrope"', num:'"Space Grotesk"', skin:"night",
+             light:["#e8ecf4","#3fe0d0","#1b2131"], dark:["#e8ecf4","#3fe0d0","#1b2131"], bg:"#121620", money:"#d4f04a"},
   ledger:   {name:"Ledger",    font:"Plex Sans / Plex Mono",   sans:'"IBM Plex Sans"', num:'"IBM Plex Mono"',
              light:["#121a16","#0e6b57","#ffffff"], dark:["#e6ede9","#52c3a3","#0e1411"]},
   cobalt:   {name:"Cobalt",    font:"Space Grotesk / JetBrains Mono", sans:'"Space Grotesk"', num:'"JetBrains Mono"',
@@ -1027,7 +1075,7 @@ const STYLES = {
   shu:      {name:"Shu",       font:"Zen Kaku Gothic / Roboto Mono", sans:'"Zen Kaku Gothic New"', num:'"Roboto Mono"',
              light:["#1c1c1f","#c0182c","#ffffff"], dark:["#ececef","#ff7282","#141417"]},
 };
-let styleId = "ledger";
+let styleId = "night";
 try { styleId = localStorage.getItem("mf-style") || styleId; } catch(e){}
 const fromHash = location.hash.replace("#style-","");
 if (STYLES[fromHash]) styleId = fromHash;
@@ -1037,11 +1085,20 @@ function applyStyle(){
   r.setProperty("--ink", ink); r.setProperty("--accent", accent); r.setProperty("--paper", paper);
   r.setProperty("--font-jp", `${st.sans}, "Zen Kaku Gothic New", system-ui, -apple-system, "Hiragino Sans", sans-serif`);
   r.setProperty("--font-num", `${st.num}, ui-monospace, SFMono-Regular, Menlo, monospace`);
+  document.documentElement.classList.toggle("skin-night", st.skin==="night");
+  if (st.bg) r.setProperty("--bg", st.bg); else r.removeProperty("--bg");
+  r.colorScheme = st.skin==="night" ? "dark" : "";
   $("styles").innerHTML = Object.entries(STYLES).map(([id,x])=>{ const c = x[isDark()?"dark":"light"];
     return `<button class="sty" type="button" data-style="${id}" aria-pressed="${id===styleId}">
-      <span class="sw"><i style="background:${c[0]}"></i><i style="background:${c[1]}"></i></span>
+      <span class="sw"><i style="background:${x.skin?c[2]:c[0]}"></i><i style="background:${c[1]}"></i>${x.money?`<i style="background:${x.money}"></i>`:""}</span>
       <b style="font-family:${x.sans.replace(/"/g,"'")},sans-serif">${x.name}</b><small>${x.font}</small></button>`; }).join("");
 }
+$("nightAdd").addEventListener("click", ()=>toggleMenu(true));
+$("nightHero").addEventListener("click", e=>{
+  const b = e.target.closest("[data-goto]"); if (!b) return;
+  $("nightHero").querySelectorAll("[data-goto]").forEach(x=>x.setAttribute("aria-current", String(x===b)));
+  document.querySelector(`section[aria-label="${b.dataset.goto}"]`)?.scrollIntoView({behavior: matchMedia("(prefers-reduced-motion:reduce)").matches ? "auto" : "smooth"});
+});
 $("styles").addEventListener("click", e=>{
   const b = e.target.closest("[data-style]"); if (!b) return;
   styleId = b.dataset.style; applyStyle();
