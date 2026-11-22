@@ -453,6 +453,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   <h3 id="rcptTitle">Add a receipt</h3>
   <p class="lead">Take a photo and it is read and saved automatically. A receipt fills in the categories of a card charge; paid in cash or no charge yet, it is added as spending.</p>
   <div id="rcptPick" style="display:grid;gap:8px">
+    <div class="rerr-top" id="rNoKey" hidden>This app has no Google Cloud Vision key yet, so photos can't be read. <button class="linkbtn" type="button" id="rNoKeyBtn" style="padding:0">Add the key in settings</button></div>
     <div class="pick2">
       <label for="rcptCam"><input type="file" id="rcptCam" accept="image/*" capture="environment"><span class="ic2">◉</span><b>Take photo</b></label>
       <label for="rcptLib"><input type="file" id="rcptLib" accept="image/*" multiple><span class="ic2">▦</span><b>From library</b></label>
@@ -1050,7 +1051,9 @@ function rcptStep(step){
   $("rcptReading").hidden = step!=="reading";
   $("rcptReview").hidden = step!=="review"; $("rcptReview").style.display = step==="review" ? "grid" : "none";
 }
+let lastReadErr = "";
 function openRcpt(){
+  setTimeout(()=>{ $("rNoKey").hidden = !!visionKey(); });
   $("menu").hidden = true; $("rcptSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true;
   document.body.style.overflow = "hidden"; rcptStep("pick"); $("rcptCam").value = $("rcptLib").value = "";
 }
@@ -1165,7 +1168,7 @@ function payFrom(d){
 async function readRcpt(url, sample, file){
   rcptStep("reading");
   $("rcptReadingText").textContent = sample ? "Reading sample receipt…" : "Reading the receipt with Google Cloud Vision…";
-  let readErr = "";
+  let readErr = ""; lastReadErr = "";
   if (sample) {
     await new Promise(r=>setTimeout(r, 900));
     rcpt = {store:RCPT_SAMPLE.store, date:`${TODAY.getFullYear()}-11-03`, total:RCPT_SAMPLE.total, pay:"main", items:RCPT_SAMPLE.items.map(i=>[...i])};
@@ -1183,7 +1186,7 @@ async function readRcpt(url, sample, file){
     $("rcptShot").textContent = url ? "" : "SAMPLE";
     $("rStore").value = rcpt.store; $("rTotal").value = rcpt.total || ""; $("rDate").value = rcpt.date;
     $("rPay").innerHTML = cardOptions(rcpt.pay);
-    $("rErr").textContent = readErr;
+    $("rErr").textContent = readErr; lastReadErr = readErr;
     $("rNote").textContent = sample ? "Sample receipt. Check the details, then save." : readErr ? "Reading did not work this time." : "Read by Google Cloud Vision. Check the store, total and items before saving.";
     renderRcptItems(); updateRcpt();
     // 写真から読めたら、そのまま自動で保存する（Smart Ledger と同じ動き）。直したいときはトーストの「Edit」
@@ -1252,14 +1255,15 @@ $("rAddItem").addEventListener("click", ()=>{
 ["rcptCam","rcptLib"].forEach(id=>$(id).addEventListener("change", e=>{
   const f = e.target.files[0]; if (f) readRcpt(URL.createObjectURL(f), false, f);
 }));
+$("rNoKeyBtn").addEventListener("click", ()=>{ closeAll(); openSettings(); keyNote(); $("sAppKey").focus(); });
 $("rcptSample").addEventListener("click", ()=>readRcpt("", true));
 // 保存処理：成功したらメッセージを返す。入力に不足があれば rErr に理由を出して null を返す
 function saveRcpt(){
   updateRcpt();
   const items = rcpt.items.filter(i=>(+i[2]||0)>0).map(i=>[i[0].trim() || rcpt.store || "Item", i[1], +i[2]]);
   const sum = items.reduce((a,i)=>a+i[2],0);
-  if (!rcpt.store){ $("rErr").textContent = "Enter the store name"; return null; }
-  if (rcpt.total <= 0){ $("rErr").textContent = "Enter the total of ¥1 or more"; return null; }
+  if (!rcpt.store){ $("rErr").textContent = "Enter the store name" + (lastReadErr ? ` (${lastReadErr})` : ""); return null; }
+  if (rcpt.total <= 0){ $("rErr").textContent = "Enter the total of ¥1 or more" + (lastReadErr ? ` (${lastReadErr})` : ""); return null; }
   if (sum !== rcpt.total){ $("rErr").textContent = `Items add up to ${yen(sum)} but the total is ${yen(rcpt.total)}. Fix an amount or add an item.`; return null; }
   const cats = new Set(items.map(i=>i[1]));
   const apply = t => { if (cats.size > 1){ t.splits = items; delete t.cat; t.st = "fill"; } else { delete t.splits; t.cat = [...cats][0]; t.st = "ok"; } };
