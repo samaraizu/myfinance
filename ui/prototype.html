@@ -317,7 +317,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .free.neg{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:6px}
 .wish.on{border-color:var(--accent)}
 .toast{border:1px solid var(--ink)}
-.toast{background:var(--ink);color:var(--paper)}
+.toast{background:var(--ink);color:var(--paper);display:flex;align-items:center;gap:12px}
+.toast-btn{font:inherit;font-size:13px;font-weight:800;color:var(--accent);background:none;border:0;padding:6px 4px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
 @media (max-width:360px){.free{font-size:34px}.legend .num{font-size:12px}}
 @media (prefers-reduced-motion:reduce){.meter .seg,.sheet{transition:none;animation:none}}
 </style>
@@ -432,7 +433,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 <div class="sheet" id="rcptSheet" role="dialog" aria-modal="true" aria-labelledby="rcptTitle" hidden>
   <div class="grip"></div>
   <h3 id="rcptTitle">Add a receipt</h3>
-  <p class="lead">A receipt fills in the categories of a card charge. Paid in cash or no charge yet? It is added as spending.</p>
+  <p class="lead">Take a photo and it is read and saved automatically. A receipt fills in the categories of a card charge; paid in cash or no charge yet, it is added as spending.</p>
   <div id="rcptPick" style="display:grid;gap:8px">
     <div class="pick2">
       <label for="rcptCam"><input type="file" id="rcptCam" accept="image/*" capture="environment"><span class="ic2">◉</span><b>Take photo</b></label>
@@ -824,6 +825,12 @@ const SAMPLE_COPY = JSON.stringify({TX, BACKS, WISH});
 // トースト
 let toastTimer;
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.hidden=true, 3200); }
+function toastAction(msg, label, fn){
+  const t=$("toast"); t.textContent=msg;
+  const b=document.createElement("button"); b.type="button"; b.className="toast-btn"; b.textContent=label;
+  b.addEventListener("click", ()=>{ t.hidden=true; fn(); });
+  t.append(" ", b); t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.hidden=true, 8000);
+}
 
 // ボトムシート
 function fillTxSelect(){
@@ -1140,6 +1147,23 @@ async function readRcpt(url, sample, file){
     $("rErr").textContent = readErr;
     $("rNote").textContent = sample ? "Sample receipt. Check the details, then save." : readErr ? "Reading did not work this time." : "Read by Google Cloud Vision. Check the store, total and items before saving.";
     renderRcptItems(); updateRcpt();
+    // 写真から読めたら、そのまま自動で保存する（Smart Ledger と同じ動き）。直したいときはトーストの「Edit」
+    if (!sample && !readErr && rcpt.total > 0 && rcpt.store){
+      const before = JSON.stringify(TX), count = $("rcptCount").textContent, keep = JSON.parse(JSON.stringify(rcpt));
+      const msg = saveRcpt();
+      if (msg){
+        toastAction(msg, "Edit", ()=>{
+          TX = JSON.parse(before); $("rcptCount").textContent = count; render();
+          openRcpt(); rcpt = keep;
+          $("rStore").value = rcpt.store; $("rTotal").value = rcpt.total; $("rDate").value = rcpt.date;
+          $("rPay").innerHTML = Object.entries(CARDS).map(([k,c])=>`<option value="${k}" ${k===rcpt.pay?"selected":""}>${k==="cash"?"Cash":c.name+" "+c.label}</option>`).join("");
+          $("rcptShot").style.backgroundImage = url ? `url(${url})` : ""; $("rcptShot").textContent = "";
+          $("rErr").textContent = ""; $("rNote").textContent = "Fix anything that was read wrong, then save.";
+          renderRcptItems(); updateRcpt(); rcptStep("review");
+        });
+        return;
+      }
+    }
     rcptStep("review");
     if (!sample && readErr) $("rStore").focus();
   }
@@ -1189,13 +1213,14 @@ $("rAddItem").addEventListener("click", ()=>{
   const f = e.target.files[0]; if (f) readRcpt(URL.createObjectURL(f), false, f);
 }));
 $("rcptSample").addEventListener("click", ()=>readRcpt("", true));
-$("rcptSave").addEventListener("click", ()=>{
+// 保存処理：成功したらメッセージを返す。入力に不足があれば rErr に理由を出して null を返す
+function saveRcpt(){
   updateRcpt();
   const items = rcpt.items.filter(i=>(+i[2]||0)>0).map(i=>[i[0].trim() || rcpt.store || "Item", i[1], +i[2]]);
   const sum = items.reduce((a,i)=>a+i[2],0);
-  if (!rcpt.store) return $("rErr").textContent = "Enter the store name";
-  if (rcpt.total <= 0) return $("rErr").textContent = "Enter the total of ¥1 or more";
-  if (sum !== rcpt.total) return $("rErr").textContent = `Items add up to ${yen(sum)} but the total is ${yen(rcpt.total)}. Fix an amount or add an item.`;
+  if (!rcpt.store){ $("rErr").textContent = "Enter the store name"; return null; }
+  if (rcpt.total <= 0){ $("rErr").textContent = "Enter the total of ¥1 or more"; return null; }
+  if (sum !== rcpt.total){ $("rErr").textContent = `Items add up to ${yen(sum)} but the total is ${yen(rcpt.total)}. Fix an amount or add an item.`; return null; }
   const cats = new Set(items.map(i=>i[1]));
   const apply = t => { if (cats.size > 1){ t.splits = items; delete t.cat; t.st = "fill"; } else { delete t.splits; t.cat = [...cats][0]; t.st = "ok"; } };
   let msg;
@@ -1208,8 +1233,10 @@ $("rcptSave").addEventListener("click", ()=>{
     msg = `Added ${rcpt.store} · ${yen(rcpt.total)}`;
   }
   $("rcptCount").textContent = +$("rcptCount").textContent + 1;
-  closeAll(); render(); toast(msg);
-});
+  closeAll(); render();
+  return msg;
+}
+$("rcptSave").addEventListener("click", ()=>{ const msg = saveRcpt(); if (msg) toast(msg); });
 $("cancelForm").addEventListener("click", closeAll);
 $("scrim").addEventListener("click", closeAll);
 document.addEventListener("click", e=>{ if (e.target.closest("[data-close]")) closeAll(); });
