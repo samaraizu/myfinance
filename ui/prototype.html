@@ -233,6 +233,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .kv dd{margin:0;font-weight:500;overflow-wrap:anywhere}
 .matchbox{border:1px solid var(--accent);background:var(--accent-soft);padding:10px 12px;font-size:13px;display:grid;gap:2px}
 .matchbox small{color:var(--muted);font-size:11px;letter-spacing:.06em}
+.rerr-top{border:1px solid var(--ink);background:var(--ink-soft);padding:10px 12px;font-size:14px;line-height:1.5;color:var(--ink)}
+.skin-night .rerr-top{border-radius:10px}
 .ritems{border-top:1px solid var(--line)}
 .ritems li{grid-template-columns:minmax(0,1fr) 6.5em auto!important;gap:6px 8px}
 .ritems input{font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:0;min-height:40px;padding:0 8px;width:100%;min-width:0}
@@ -443,6 +445,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   </div>
   <div class="reading" id="rcptReading" hidden><span id="rcptReadingText">Reading receipt…</span><div class="track"><i></i></div></div>
   <div id="rcptReview" hidden style="display:none;gap:12px">
+    <div class="err rerr-top" id="rErr" role="alert"></div>
     <div class="rcpt">
       <div class="shot" id="rcptShot"></div>
       <div style="display:grid;gap:8px;min-width:0">
@@ -460,7 +463,6 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
       <button class="linkbtn" type="button" id="rAddItem" style="justify-self:start">＋ Add an item</button>
     </div>
     <div class="sumline"><span id="rSumLabel">Items add up to</span><b id="rItemsSum"></b></div>
-    <div class="err" id="rErr" role="alert"></div>
     <p class="lead" style="margin:0" id="rNote">Check the details, then save.</p>
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Cancel</button>
@@ -1187,6 +1189,7 @@ function updateRcpt(){
   const sum = rcpt.items.reduce((a,i)=>a+(+i[2]||0),0);
   $("rItemsSum").textContent = yen(sum);
   $("rSumLabel").textContent = rcpt.total && sum!==rcpt.total ? `Items add up to (total is ${yen(rcpt.total)})` : "Items add up to";
+  $("rcptMatch").hidden = !rcpt.total;
   $("rcptMatch").innerHTML = rcptMatchTx
     ? `<small>MATCHED CARD CHARGE</small><span>${short(rcptMatchTx.card)} · ${rcptMatchTx.d} ${esc(rcptMatchTx.m)}</span><span class="num">${yen(rcptMatchTx.amt)} · same amount</span>`
     : `<small>${rcpt.pay==="cash" ? "CASH" : "NO MATCHING CHARGE YET"}</small><span>Saved as spending of ${yen(rcpt.total||0)}${rcpt.pay==="cash"?"":` on ${short(rcpt.pay)}`}.</span>`;
