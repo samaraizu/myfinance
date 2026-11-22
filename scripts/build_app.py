@@ -29,3 +29,14 @@ page = f"""<!doctype html>
 """
 (root / "app/index.html").write_text(page, encoding="utf-8")
 print("app/index.html", len(page))
+
+# Worker に同梱する静的ファイル（app/ の中身）を worker/static.js に書き出す
+import base64, json
+TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
+         ".webmanifest": "application/manifest+json", ".png": "image/png", ".json": "application/json"}
+files = {}
+for f in sorted((root / "app").rglob("*")):
+    if f.is_file() and f.suffix in TYPES:
+        files["/" + f.relative_to(root / "app").as_posix()] = {"type": TYPES[f.suffix], "b64": base64.b64encode(f.read_bytes()).decode()}
+(root / "worker/static.js").write_text("// 生成ファイル: scripts/build_app.py が app/ から作る。手で編集しない\nexport const FILES = " + json.dumps(files) + ";\n", encoding="utf-8")
+print("worker/static.js", len(files), "files")
