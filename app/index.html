@@ -503,7 +503,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   </form>
   <div style="display:grid;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
     <p class="lead" id="sDataNote" style="margin:0"></p>
-    <button class="btn ghost" type="button" id="sClear">Start with my own data</button>
+    <button class="btn ghost" type="button" id="sClear">Remove sample data</button>
     <button class="btn ghost" type="button" id="sSample">Load sample data</button>
   </div>
 </div>
@@ -839,6 +839,8 @@ function load(){
   } catch(e){}
 }
 const SAMPLE_COPY = JSON.stringify({TX, BACKS, WISH});
+// サンプルのID（これ以外は自分で登録したデータ）
+const SAMPLE_IDS = new Set([...TX, ...BACKS, ...WISH].map(x=>x.id));
 
 // トースト
 let toastTimer;
@@ -1404,8 +1406,8 @@ function openSettings(){
   $("menu").hidden = true; $("setSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true;
   document.body.style.overflow = "hidden";
   $("sBudget").value = BUDGET; $("sErr").textContent = ""; clearArmed = false;
-  $("sClear").textContent = "Start with my own data";
-  $("sDataNote").textContent = SAMPLE ? "You are looking at sample data. Clear it to start tracking your own month." : `Your data: ${TX.length} charges, ${BACKS.length} paybacks, ${WISH.length} wishlist items.`;
+  $("sClear").textContent = "Remove sample data";
+  $("sDataNote").textContent = SAMPLE ? "Sample data is shown. Removing it keeps the receipts and other entries you added yourself." : `Your data: ${TX.length} charges, ${BACKS.length} paybacks, ${WISH.length} wishlist items.`;
 }
 $("openSettings").addEventListener("click", openSettings);
 const visionKey = () => { try { return localStorage.getItem("mf-vision-key") || ""; } catch(e){ return ""; } };
@@ -1425,12 +1427,21 @@ $("setForm").addEventListener("submit", e=>{
   BUDGET = v; closeAll(); render(); toast(`Budget set to ${yen(v)}`);
 });
 $("sClear").addEventListener("click", ()=>{
-  if (!clearArmed){ clearArmed = true; $("sClear").textContent = "Tap again to clear everything"; return; }
-  TX = []; BACKS = []; WISH = []; SAMPLE = false; filter = "All"; cardFilter = "all";
-  closeAll(); render(); toast("Cleared. Add your first item with ＋");
+  if (!clearArmed){ clearArmed = true; $("sClear").textContent = "Tap again to remove the samples"; return; }
+  // サンプルだけ消して、自分で登録したレシート・割り勘・欲しいものは残す
+  TX = TX.filter(t=>!SAMPLE_IDS.has(t.id));
+  const txIds = new Set(TX.map(t=>t.id));
+  BACKS = BACKS.filter(b=>!SAMPLE_IDS.has(b.id) && txIds.has(b.tx));
+  WISH = WISH.filter(w=>!SAMPLE_IDS.has(w.id));
+  SAMPLE = false; filter = "All"; cardFilter = "all";
+  closeAll(); render();
+  const n = TX.length + BACKS.length + WISH.length;
+  toast(n ? `Samples removed. Kept your ${n} entr${n>1?"ies":"y"}.` : "Samples removed. Add your first receipt with ＋");
 });
 $("sSample").addEventListener("click", ()=>{
-  const d = JSON.parse(SAMPLE_COPY); TX = d.TX; BACKS = d.BACKS; WISH = d.WISH; SAMPLE = true;
+  const d = JSON.parse(SAMPLE_COPY);
+  TX = [...d.TX, ...TX.filter(t=>!SAMPLE_IDS.has(t.id))]; BACKS = [...d.BACKS, ...BACKS.filter(b=>!SAMPLE_IDS.has(b.id))]; WISH = [...d.WISH, ...WISH.filter(w=>!SAMPLE_IDS.has(w.id))];
+  TX.sort((a,b)=>mdNum(b.d)-mdNum(a.d)); SAMPLE = true;
   closeAll(); render(); toast("Sample data loaded");
 });
 
