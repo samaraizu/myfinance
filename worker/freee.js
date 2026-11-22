@@ -85,7 +85,19 @@ export async function handleFreee(request, env) {
           if (!wallet_txns || wallet_txns.length < 100) break;
         }
       }
-      return json(200, { cards, txns, fetched_at: new Date().toISOString() });
+      // Amazon の注文（品名つき）: カード明細の「アマゾン」を品名で補うために使う。カードの請求は注文の数日〜2週間後になるので20日前から取る
+      const wallets = (await freeeGet(env, token, "/walletables", { company_id, type: "wallet" })).walletables || [];
+      const amazon = wallets.filter(w => w.type === "wallet" && /amazon|アマゾン/i.test(w.name));
+      const since = new Date(new Date(from).getTime() - 20 * 86400000).toISOString().slice(0, 10);
+      const orders = [];
+      for (const w of amazon) {
+        for (let offset = 0; offset < 1000; offset += 100) {
+          const { wallet_txns } = await freeeGet(env, token, "/wallet_txns", { company_id, walletable_type: "wallet", walletable_id: w.id, start_date: since, end_date: to, limit: 100, offset });
+          for (const t of wallet_txns || []) if (t.walletable_id === w.id && t.entry_side === "expense") orders.push({ id: t.id, date: t.date, description: t.description, amount: t.amount });
+          if (!wallet_txns || wallet_txns.length < 100) break;
+        }
+      }
+      return json(200, { cards, txns, orders, fetched_at: new Date().toISOString() });
     } catch (e) {
       if (/invalid_grant|refresh/i.test(e.message)) {
         await env.MF_KV.delete("freee_tokens");

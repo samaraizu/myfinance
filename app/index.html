@@ -1091,13 +1091,18 @@ async function readWithVision(file){
   return parseReceiptText(text);
 }
 const KEYWORDS = [
+  ["Clothing", /パンツ|ズボン|スウェット|クロッグ|スリッポン|スニーカー|靴|シャツ|ジャケット|コート|ニット|ワンピース|スカート|ソックス/],
+  ["Books", /テキスト|教科書|問題集|参考書|単行本|Kindle版|検定/],
+  ["Gadgets", /電話機|変換器|ケーブル|充電器|イヤホン|ヘッドホン|マウス|キーボード|保護フィルム|HDMI|モバイルバッテリー/],
+  ["Household", /トイレットペーパー|ティッシュ|洗剤|柔軟剤|シャンプー|美容液|セラム|化粧水|クレンジング|洗顔|フェイスマスク|フェイスパック|マスク|歯ブラシ|カイロ|医薬品/],
+  ["Food", /プロテイン|はちみつ|炭酸水|ミネラルウォーター|さば|シーチキン|缶詰|米|パスタ|リキュール|ワイン|ビール|お茶|コーヒー豆|スナック|ナッツ/],
   ["Cafe", /スターバックス|STARBUCKS|ドトール|タリーズ|コメダ|ブルーボトル|カフェ|CAFE|コーヒー|珈琲|ラテ/i],
   ["Transport", /ガソリン|ENEOS|エネオス|出光|コスモ石油|タクシー|TAXI|JR|駅|Suica|PASMO|駐車|パーキング|高速/i],
   ["Books", /書店|書房|紀伊國屋|紀伊国屋|ジュンク堂|蔦屋|TSUTAYA|文庫|雑誌|BOOK/i],
   ["Gadgets", /ビックカメラ|ヨドバシ|ケーズデンキ|ヤマダ電機|エディオン|家電|ケーブル|充電|電池|イヤホン|USB/i],
   ["Clothing", /ユニクロ|UNIQLO|ジーユー|\bGU\b|ZARA|H&M|しまむら|シャツ|パンツ|靴下|衣料/i],
   ["Household", /ドラッグ|マツモトキヨシ|ウエルシア|スギ薬局|ツルハ|ダイソー|セリア|無印|ニトリ|ハンズ|ロフト|洗剤|ティッシュ|トイレット|シャンプー|日用品/i],
-  ["Food", /セブン|ファミリーマート|ファミマ|ローソン|ミニストップ|イオン|ライフ|西友|成城石井|まいばすけっと|オーケー|業務スーパー|マクドナルド|吉野家|松屋|すき家|弁当|おにぎり|パン|牛乳|惣菜|食品|レストラン|飲食/i],
+  ["Food", /セブン|ファミリーマート|ファミマ|ローソン|ミニストップ|イオン|ライフ|西友|成城石井|まいばすけっと|マルエツ|オイシックス|デイリーヤマザキ|ナチュラルローソン|オーケー|業務スーパー|マクドナルド|吉野家|松屋|すき家|弁当|おにぎり|パン|牛乳|惣菜|食品|レストラン|飲食/i],
 ];
 const guessCat = (t, fallback) => (KEYWORDS.find(([,re])=>re.test(t)) || [fallback])[0];
 function parseReceiptText(raw){
@@ -1506,9 +1511,25 @@ async function syncFreee(manual){
     TX.push({id, d:md, card, m:t.description, amt:t.amount, src:["freee"], st:"miss", cat:guessCat(t.description, "Other")});
     added++;
   }
+  // カード明細の「アマゾン」を、同じ金額で2週間以内に先に注文した Amazon の注文と結び、品名とカテゴリを付ける
+  const used = new Set(TX.map(t=>t.amzOrder).filter(Boolean));
+  const dayNum = iso => Math.floor(new Date(iso).getTime()/86400000);
+  let enriched = 0;
+  for (const t of TX.filter(x=>x.id.startsWith("f") && !x.amzOrder && /アマゾン|AMAZON/i.test(x.m))){
+    const ft = d.txns.find(x=>"f"+x.id===t.id); if (!ft) continue;
+    const o = (d.orders||[]).filter(o=>!used.has(o.id) && o.amount===t.amt && dayNum(ft.date)-dayNum(o.date) >= 0 && dayNum(ft.date)-dayNum(o.date) <= 14)
+      .sort((a,b)=>dayNum(b.date)-dayNum(a.date))[0];
+    if (!o) continue;
+    used.add(o.id);
+    const items = o.description.replace(/・?注文番号[\d-]+$/,"").split("・").map(x=>x.replace(/^\[[^\]]*\]\s*/,"").trim()).filter(Boolean);
+    const title = items.length ? items.map(x=>x.slice(0,40)).join(" / ") : "Amazon order";
+    const cat = guessCat(items.join(" "), "Other");
+    Object.assign(t, {amzOrder:o.id, m:"Amazon", splits:[[title, cat, t.amt]], src:["freee","amz"], st:"fill"}); delete t.cat;
+    enriched++;
+  }
   TX.sort((a,b)=>mdNum(b.d)-mdNum(a.d));
   FREEE_SYNC = d.fetched_at; render(); freeeNote();
-  if (manual || added || merged) toast(`freee: ${added} new charge${added===1?"":"s"}${merged?`, ${merged} matched to receipts`:""}`);
+  if (manual || added || merged || enriched) toast(`freee: ${added} new charge${added===1?"":"s"}${merged?`, ${merged} matched to receipts`:""}${enriched?`, ${enriched} Amazon itemized`:""}`);
 }
 $("openSettings").addEventListener("click", ()=>{ $("sFreeeKey").value = ""; freeeNote(); });
 $("freeeForm").addEventListener("submit", e=>{
