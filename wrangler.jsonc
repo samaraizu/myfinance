@@ -4,6 +4,8 @@
   "main": "worker/index.js",
   "compatibility_date": "2026-11-01",
   "observability": { "enabled": true },
+  "kv_namespaces": [{ "binding": "MF_KV", "id": "5dd329b3423a456bb858ecf3887ef680" }],
+  "vars": { "FREEE_COMPANY_ID": "10178178" },
   "workers_dev": true,
   "preview_urls": false
 }

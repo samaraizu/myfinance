@@ -1,5 +1,6 @@
 // myfinance: app/ の静的ファイル（worker/static.js に同梱）を配信する。レシートの読み取りはスマホから Google Cloud Vision を直接呼ぶ
 import { FILES } from "./static.js";
+import { handleFreee } from "./freee.js";
 
 const SECURITY = {
   "X-Robots-Tag": "noindex",
@@ -16,7 +17,10 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     let res;
-    if (request.method !== "GET" && request.method !== "HEAD") {
+    if (url.pathname.startsWith("/api/freee/")) {
+      res = await handleFreee(request, env);
+      if (res.status >= 300 && res.status < 400) return res;  // リダイレクトはそのまま返す
+    } else if (request.method !== "GET" && request.method !== "HEAD") {
       res = new Response("Method not allowed", { status: 405 });
     } else {
       const path = url.pathname === "/" ? "/index.html" : url.pathname;

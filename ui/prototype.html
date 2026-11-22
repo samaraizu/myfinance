@@ -485,6 +485,15 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <p class="lead" style="margin:0" id="sKeyNote"></p>
     <button class="btn ghost" type="submit">Save key on this phone</button>
   </form>
+  <form id="freeeForm" novalidate style="display:grid;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
+    <label class="field">freee card charges · App key<input type="password" id="sFreeeKey" autocomplete="off" placeholder="The APP_KEY secret you set in Cloudflare"></label>
+    <p class="lead" style="margin:0" id="sFreeeNote"></p>
+    <div class="two">
+      <button class="btn ghost" type="submit">Save key</button>
+      <button class="btn ghost" type="button" id="sFreeeConnect">Connect freee</button>
+    </div>
+    <button class="btn" type="button" id="sFreeeSync">Sync card charges now</button>
+  </form>
   <div style="display:grid;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
     <p class="lead" id="sDataNote" style="margin:0"></p>
     <button class="btn ghost" type="button" id="sClear">Remove sample data</button>
@@ -611,7 +620,7 @@ const TODAY = new Date();
 const DAY = TODAY.getDate(), DAYS = new Date(TODAY.getFullYear(), TODAY.getMonth()+1, 0).getDate();
 const TODAY_MD = `${TODAY.getMonth()+1}/${DAY}`;
 const TODAY_ISO = `${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,"0")}-${String(DAY).padStart(2,"0")}`;
-let BUDGET = 100000, SAMPLE = true;
+let BUDGET = 100000, SAMPLE = true, FREEE_SYNC = "";
 const esc = v => String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const yen = n => (n < 0 ? "-¥" : "¥") + Math.abs(Math.round(n)).toLocaleString("en-US");
 const $ = id => document.getElementById(id);
@@ -692,7 +701,10 @@ const received = t => BACKS.filter(b=>b.tx===t.id && b.status==="in").reduce((a,
 const pending  = t => BACKS.filter(b=>b.tx===t.id && b.status==="wait").reduce((a,b)=>a+b.amt,0);
 const linesOf = t => (t.splits ? t.splits.map(s=>({cat:s[1], amt:s[2]})) : [{cat:t.cat, amt:t.amt}])
   .map(l => ({...l, net: l.amt - received(t) * l.amt / t.amt}));  // 受け取り分は内訳に按分
-const short = c => c==="cash" ? "Cash" : `${CARDS[c].name}${CARDS[c].label.slice(-4)}`;
+const short = c => c==="cash" ? "Cash" : !CARDS[c] ? "Card" : c.startsWith("fc") ? CARDS[c].name : `${CARDS[c].name}${CARDS[c].label.slice(-4)}`;
+// 選べるカード: 現金・freee のカード・（サンプル表示中なら）サンプルのカード
+const cardChoices = () => Object.entries(CARDS).filter(([k])=>k==="cash" || k.startsWith("fc") || SAMPLE);
+const cardOptions = sel => cardChoices().map(([k,c])=>`<option value="${k}" ${k===sel?"selected":""}>${k==="cash"?"Cash":k.startsWith("fc")?c.label:c.name+" "+c.label}</option>`).join("");
 
 function render(){
   const cardTotal = TX.reduce((a,t)=>a+t.amt,0);
@@ -782,7 +794,7 @@ function render(){
   $("mOk").textContent = TX.filter(t=>t.st==="ok"&&t.src.includes("rcp")).length;
   $("mSplit").textContent = TX.filter(t=>t.st==="fill").length;
   $("mMiss").textContent = TX.filter(t=>t.st==="miss").length;
-  $("cardFilters").innerHTML = [["all","All cards"], ...Object.keys(CARDS).map(k=>[k, short(k)])]
+  $("cardFilters").innerHTML = [["all","All cards"], ...[...new Set(TX.map(t=>t.card))].filter(k=>CARDS[k]).map(k=>[k, short(k)])]
     .map(([k,l])=>`<button class="chip" aria-pressed="${cardFilter===k}" data-card="${k}">${l}</button>`).join("");
   $("filters").innerHTML = ["All", ...CAT_ORDER.filter(c=>byCat[c].s>0)]
     .map(c=>`<button class="chip" aria-pressed="${filter===c}" data-cat="${c}">${c}</button>`).join("");
@@ -790,7 +802,7 @@ function render(){
   const rows = TX.filter(t => (cardFilter==="all" || t.card===cardFilter)
     && (filter==="All" || (t.splits ? t.splits.some(s=>s[1]===filter) : t.cat===filter)));
   const stLabel = {ok:["ok","Matched"], fill:["fill","Itemized"], miss:["miss","Needs receipt"]};
-  const srcLabel = {amz:["amz","Amazon"], rcp:["rcp","Receipt"], amx:["amx","Amex sheet"]};
+  const srcLabel = {amz:["amz","Amazon"], rcp:["rcp","Receipt"], amx:["amx","Amex sheet"], freee:["","freee"]};
   $("tx").innerHTML = rows.length ? rows.map(t=>{
     const st = (t.st==="miss" && /AMAZON/.test(t.m)) ? ["miss","Needs order"] : stLabel[t.st], r = received(t);
     const tags = `<span class="tag card">${short(t.card)}</span>`
@@ -812,7 +824,8 @@ function render(){
 // 端末内に保存（ログインなし・サーバー送信なし）
 const STORE = "mf-data-v1";
 function save(){
-  try { localStorage.setItem(STORE, JSON.stringify({v:1, budget:BUDGET, sample:SAMPLE, TX, BACKS, WISH})); } catch(e){}
+  const fcards = Object.fromEntries(Object.entries(CARDS).filter(([k])=>k.startsWith("fc")));
+  try { localStorage.setItem(STORE, JSON.stringify({v:1, budget:BUDGET, sample:SAMPLE, TX, BACKS, WISH, fcards, freeeSync:FREEE_SYNC})); } catch(e){}
 }
 function load(){
   try {
@@ -820,6 +833,7 @@ function load(){
     if (!d || d.v!==1) return;
     BUDGET = d.budget || BUDGET; SAMPLE = !!d.sample;
     TX = d.TX || []; BACKS = d.BACKS || []; WISH = d.WISH || [];
+    Object.assign(CARDS, d.fcards || {}); FREEE_SYNC = d.freeeSync || "";
   } catch(e){}
 }
 const SAMPLE_COPY = JSON.stringify({TX, BACKS, WISH});
@@ -870,7 +884,7 @@ function openSheet(show){
   $("openForm").hidden = true;
   document.body.style.overflow = show ? "hidden" : "";
   if (show){
-    $("fCard").innerHTML = Object.entries(CARDS).map(([k,c])=>`<option value="${k}">${c.name} ${c.label}</option>`).join("");
+    $("fCard").innerHTML = cardOptions("");
     const names = [...new Set(BACKS.map(b=>b.who))];
     $("whoQuick").innerHTML = names.map(n=>`<button type="button" data-who="${esc(n)}">${esc(n)}</button>`).join("");
     fillTxSelect(); $("fAmt").focus();
@@ -1147,7 +1161,7 @@ async function readRcpt(url, sample, file){
     $("rcptShot").style.backgroundImage = url ? `url(${url})` : "";
     $("rcptShot").textContent = url ? "" : "SAMPLE";
     $("rStore").value = rcpt.store; $("rTotal").value = rcpt.total || ""; $("rDate").value = rcpt.date;
-    $("rPay").innerHTML = Object.entries(CARDS).map(([k,c])=>`<option value="${k}" ${k===rcpt.pay?"selected":""}>${k==="cash"?"Cash":c.name+" "+c.label}</option>`).join("");
+    $("rPay").innerHTML = cardOptions(rcpt.pay);
     $("rErr").textContent = readErr;
     $("rNote").textContent = sample ? "Sample receipt. Check the details, then save." : readErr ? "Reading did not work this time." : "Read by Google Cloud Vision. Check the store, total and items before saving.";
     renderRcptItems(); updateRcpt();
@@ -1160,7 +1174,7 @@ async function readRcpt(url, sample, file){
           TX = JSON.parse(before); $("rcptCount").textContent = count; render();
           openRcpt(); rcpt = keep;
           $("rStore").value = rcpt.store; $("rTotal").value = rcpt.total; $("rDate").value = rcpt.date;
-          $("rPay").innerHTML = Object.entries(CARDS).map(([k,c])=>`<option value="${k}" ${k===rcpt.pay?"selected":""}>${k==="cash"?"Cash":c.name+" "+c.label}</option>`).join("");
+          $("rPay").innerHTML = cardOptions(rcpt.pay);
           $("rcptShot").style.backgroundImage = url ? `url(${url})` : ""; $("rcptShot").textContent = "";
           $("rErr").textContent = ""; $("rNote").textContent = "Fix anything that was read wrong, then save.";
           renderRcptItems(); updateRcpt(); rcptStep("review");
@@ -1451,8 +1465,52 @@ $("wishes").addEventListener("click", e=>{
   WISH = WISH.filter(x=>x!==w); render(); toast(`Removed ${w.name}`);
 });
 
+// freee のカード明細: Worker 経由で今月分を取り込み、レシートで登録済みの支出とは金額と日付で重ねる
+const appKey = () => { try { return localStorage.getItem("mf-app-key") || ""; } catch(e){ return ""; } };
+const cardShort = name => /アメリカン|AMEX|アメックス/i.test(name) ? "Amex" : /セゾン|SAISON/i.test(name) ? "Saison" : /三井住友|SMBC/i.test(name) ? "SMBC" : /楽天/.test(name) ? "Rakuten" : /JCB/i.test(name) ? "JCB" : name.slice(0,8);
+const freeeNote = () => $("sFreeeNote").textContent = !appKey() ? "Save the App key first, then tap Connect freee." : FREEE_SYNC ? `Last synced ${new Date(FREEE_SYNC).toLocaleString("en-US",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}.` : "Key saved. Tap Connect freee once, then charges sync when the app opens.";
+async function syncFreee(manual){
+  if (!appKey()) { if (manual) toast("Save the App key in ••• settings first"); return; }
+  const first = `${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,"0")}-01`;
+  let d;
+  try {
+    const r = await fetch(`/api/freee/txns?from=${first}&to=${TODAY_ISO}`, {headers:{"X-App-Key": appKey()}, cache:"no-store"});
+    d = await r.json().catch(()=>({error:"freee sync failed. Try again."}));
+    if (!r.ok) { if (manual || d.needsConnect) toast(d.error || "freee sync failed. Try again."); return; }
+  } catch(e){ if (manual) toast("Could not reach the app server. Check the connection."); return; }
+  for (const c of d.cards) CARDS["fc"+c.id] = {name:cardShort(c.name), label:c.name};
+  let added = 0, merged = 0;
+  for (const t of d.txns.filter(x=>x.side==="expense" && x.amount>0)){
+    const id = "f"+t.id, md = mdOf(t.date), card = "fc"+t.card;
+    const have = TX.find(x=>x.id===id);
+    if (have){ Object.assign(have, {d:md, card, amt:t.amount}); continue; }
+    // レシートで先に登録した支出（現金以外）と同じ金額・前後3日なら、そのレシートを明細に重ねる
+    const rc = TX.find(x=>x.id.startsWith("r") && x.card!=="cash" && x.amt===t.amount && Math.abs(mdNum(x.d)-mdNum(md))<=3);
+    if (rc){ Object.assign(rc, {id, d:md, card, freee:t.description}); merged++; continue; }
+    TX.push({id, d:md, card, m:t.description, amt:t.amount, src:["freee"], st:"miss", cat:guessCat(t.description, "Other")});
+    added++;
+  }
+  TX.sort((a,b)=>mdNum(b.d)-mdNum(a.d));
+  FREEE_SYNC = d.fetched_at; render(); freeeNote();
+  if (manual || added || merged) toast(`freee: ${added} new charge${added===1?"":"s"}${merged?`, ${merged} matched to receipts`:""}`);
+}
+$("openSettings").addEventListener("click", ()=>{ $("sFreeeKey").value = ""; freeeNote(); });
+$("freeeForm").addEventListener("submit", e=>{
+  e.preventDefault();
+  const v = $("sFreeeKey").value.trim(); if (!v) return toast("Enter the App key first");
+  try { localStorage.setItem("mf-app-key", v); } catch(err){}
+  $("sFreeeKey").value = ""; freeeNote(); toast("App key saved on this phone");
+});
+$("sFreeeConnect").addEventListener("click", ()=>{
+  if (!appKey()) return toast("Save the App key first");
+  location.href = `/api/freee/connect?key=${encodeURIComponent(appKey())}`;
+});
+$("sFreeeSync").addEventListener("click", ()=>{ closeAll(); syncFreee(true); });
+
 $("fDate").value = TODAY_ISO;
 load();
 applyStyle();
 render();
+if (new URLSearchParams(location.search).get("freee")==="connected"){ history.replaceState(null, "", "/"); toast("freee connected"); syncFreee(true); }
+else if (!FREEE_SYNC || Date.now() - new Date(FREEE_SYNC) > 10*60*1000) syncFreee(false);
 </script>
