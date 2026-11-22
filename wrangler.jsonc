@@ -3,7 +3,6 @@
   "name": "myfinance",
   "main": "worker/index.js",
   "compatibility_date": "2026-11-01",
-  "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "workers_dev": true,
   "preview_urls": false

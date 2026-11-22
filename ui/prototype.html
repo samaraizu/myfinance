@@ -478,7 +478,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <button class="btn" type="submit">Save budget</button>
   </form>
   <form id="keyForm" novalidate style="display:grid;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
-    <label class="field">Receipt reading key<input type="password" id="sAppKey" autocomplete="off" placeholder="Only if you set APP_KEY in Cloudflare"></label>
+    <label class="field">Google Cloud Vision API key<input type="password" id="sAppKey" autocomplete="off" placeholder="The same key Smart Ledger uses"></label>
+    <p class="lead" style="margin:0" id="sKeyNote"></p>
     <button class="btn ghost" type="submit">Save key on this phone</button>
   </form>
   <div style="display:grid;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
@@ -1028,12 +1029,87 @@ function shrinkPhoto(file){
     img.src = u;
   });
 }
-async function readWithClaude(file){
+// Google Cloud Vision で文字を読み取り（Smart Ledger と同じ API・同じキー）、店名・日付・合計・品目を取り出す
+async function readWithVision(file){
+  const key = visionKey();
+  if (!key) throw new Error("Add your Google Cloud Vision API key in ••• settings.");
   const image = await shrinkPhoto(file);
-  const r = await fetch("/api/receipt", {method:"POST", headers:{"Content-Type":"application/json", "X-App-Key": appKey()}, body: JSON.stringify({image, mediaType:"image/jpeg"})});
-  const d = await r.json().catch(()=>({error:"Reading failed. Try again."}));
-  if (!r.ok) throw new Error(d.error || "Reading failed. Try again.");
-  return d;
+  const r = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${encodeURIComponent(key)}`, {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({requests:[{image:{content:image}, features:[{type:"DOCUMENT_TEXT_DETECTION"}], imageContext:{languageHints:["ja","en"]}}]}),
+  }).catch(()=>{ throw new Error("Could not reach Google Cloud Vision. Check the connection."); });
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok || d.error){
+    const msg = d.error?.message || "";
+    if (r.status===400 && /API key/i.test(msg)) throw new Error("The Vision API key is not valid. Check it in ••• settings.");
+    if (r.status===403) throw new Error(`Google refused the request: ${msg || "check that the Vision API is enabled and the key allows this site."}`);
+    throw new Error(`Google Cloud Vision returned an error${msg?": "+msg:""}.`);
+  }
+  const text = d.responses?.[0]?.fullTextAnnotation?.text || d.responses?.[0]?.textAnnotations?.[0]?.description || "";
+  if (!text) throw new Error("No text was found on this photo.");
+  return parseReceiptText(text);
+}
+const KEYWORDS = [
+  ["Cafe", /スターバックス|STARBUCKS|ドトール|タリーズ|コメダ|ブルーボトル|カフェ|CAFE|コーヒー|珈琲|ラテ/i],
+  ["Transport", /ガソリン|ENEOS|エネオス|出光|コスモ石油|タクシー|TAXI|JR|駅|Suica|PASMO|駐車|パーキング|高速/i],
+  ["Books", /書店|書房|紀伊國屋|紀伊国屋|ジュンク堂|蔦屋|TSUTAYA|文庫|雑誌|BOOK/i],
+  ["Gadgets", /ビックカメラ|ヨドバシ|ケーズデンキ|ヤマダ電機|エディオン|家電|ケーブル|充電|電池|イヤホン|USB/i],
+  ["Clothing", /ユニクロ|UNIQLO|ジーユー|\bGU\b|ZARA|H&M|しまむら|シャツ|パンツ|靴下|衣料/i],
+  ["Household", /ドラッグ|マツモトキヨシ|ウエルシア|スギ薬局|ツルハ|ダイソー|セリア|無印|ニトリ|ハンズ|ロフト|洗剤|ティッシュ|トイレット|シャンプー|日用品/i],
+  ["Food", /セブン|ファミリーマート|ファミマ|ローソン|ミニストップ|イオン|ライフ|西友|成城石井|まいばすけっと|オーケー|業務スーパー|マクドナルド|吉野家|松屋|すき家|弁当|おにぎり|パン|牛乳|惣菜|食品|レストラン|飲食/i],
+];
+const guessCat = (t, fallback) => (KEYWORDS.find(([,re])=>re.test(t)) || [fallback])[0];
+function parseReceiptText(raw){
+  const norm = raw.replace(/[０-９]/g, c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[￥]/g,"¥").replace(/[，]/g,",").replace(/[：]/g,":");
+  const lines = norm.split("\n").map(l=>l.trim()).filter(Boolean);
+  const flat = lines.join(" ");
+  const num = v => parseInt(String(v).replace(/[^\d]/g,""), 10) || 0;
+  // 合計: ラベルと金額が同じ行、または次の行にあるパターン
+  let total = 0;
+  const LABELS = ["合計","お支払金額","お支払い金額","お支払額","ご請求額","領収金額","お買上計","お買上げ計","お会計"];
+  for (const label of LABELS){
+    const i = lines.findIndex(l=>l.replace(/\s/g,"").includes(label) && !/小計/.test(l));
+    if (i < 0) continue;
+    const same = lines[i].match(/¥?\s*([\d,]{2,})\s*円?\s*$/);
+    const next = (lines[i+1]||"").match(/^¥?\s*([\d,]{2,})\s*円?/);
+    total = num((same||next||[])[1]); if (total) break;
+  }
+  if (!total){
+    const amounts = [...flat.matchAll(/¥\s*([\d,]+)|([\d,]+)\s*円/g)].map(m=>num(m[1]||m[2])).filter(n=>n>0 && n<10000000);
+    total = amounts.length ? Math.max(...amounts) : 0;
+  }
+  // 日付
+  let date = "";
+  const dm = flat.match(/(20\d{2})\s*[年\/\.\-]\s*(\d{1,2})\s*[月\/\.\-]\s*(\d{1,2})/) || flat.match(/(?:^|\D)(\d{2})\/(\d{1,2})\/(\d{1,2})(?:\D|$)/);
+  if (dm){ const y = dm[1].length===2 ? 2000+ +dm[1] : +dm[1]; date = `${y}-${String(+dm[2]).padStart(2,"0")}-${String(+dm[3]).padStart(2,"0")}`; }
+  // 店名: 既知の店名、なければ数字や記号だけでない最初の行
+  const KNOWN = ["セブン-イレブン","セブンイレブン","ファミリーマート","ローソン","ミニストップ","イオン","ライフ","成城石井","西友","まいばすけっと","スターバックス","ドトール","マクドナルド","ユニクロ","無印良品","ダイソー","ビックカメラ","ヨドバシカメラ","マツモトキヨシ","ウエルシア","ドン・キホーテ","ニトリ","ハンズ","ロフト","紀伊國屋書店","ENEOS"];
+  const store = KNOWN.find(k=>flat.includes(k)) || lines.find(l=>!/^[\d\s¥,\-\/:.()*#]+$/.test(l) && l.length>=2 && !/領収|レシート|RECEIPT|TEL|電話|〒|登録番号/i.test(l)) || "";
+  // 支払い方法とカード下4桁
+  const last4 = (flat.match(/(?:\*{2,}|X{2,}|x{2,}|●{2,})[\s\-]*(\d{4})/) || [])[1] || "";
+  const payment = /クレジット|カード|VISA|JCB|AMEX|アメックス|Master|DINERS/i.test(flat) || last4 ? "card" : (/現金|お預り|お預かり|お釣/.test(flat) ? "cash" : "unknown");
+  // 品目: 「名前 … 金額」の行を合計の行より前から拾う
+  const stop = lines.findIndex(l=>/小計|合計|お会計/.test(l));
+  const SKIP = /小計|合計|税|お預|釣|ポイント|点数|^\d+点|値引|割引|クーポン|TEL|登録番号|No\.|レジ|担当/;
+  const store_cat = guessCat(store, "Food");
+  const items = [];
+  const body = lines.slice(0, stop>0 ? stop : lines.length);
+  body.forEach((l, k)=>{  // 名前の行と金額だけの行に分かれている場合は、つなげて1行として扱う
+    const prev = body[k-1];
+    if (/^¥?\s*[\d,]{2,}\s*円?\s*(?:※|軽|\*|外|内)?$/.test(l) && prev && /[^\d\s¥,]/.test(prev) && !/[\d,]{2,}\s*円?\s*(?:※|軽|\*)?$/.test(prev)) body[k] = prev + " " + l;
+  });
+  for (const l of body){
+    const m = l.match(/^(.*?[^\d\s¥,].*?)\s+¥?\s*([\d,]{2,})\s*円?\s*(?:※|軽|\*|外|内|[A-Z])?$/);
+    if (!m || SKIP.test(l)) continue;
+    const amt = num(m[2]); if (!amt || (total && amt>total)) continue;
+    const name = m[1].replace(/^[\d\s*#]+/,"").trim(); if (!name) continue;
+    items.push({name, amount:amt, category:guessCat(name, store_cat)});
+  }
+  const sum = items.reduce((a,i)=>a+i.amount,0);
+  let out = items;
+  if (!items.length || !total || sum > total || sum < total*0.7) out = [{name:store || "Purchase", amount:total, category:store_cat}];
+  else if (sum < total) out = [...items, {name:"Tax and adjustments", amount:total-sum, category:"Other"}];
+  return {store, date, total, payment, card_last4:last4, items: total ? out : []};
 }
 function payFrom(d){
   if (d.payment === "cash") return "cash";
@@ -1042,7 +1118,7 @@ function payFrom(d){
 }
 async function readRcpt(url, sample, file){
   rcptStep("reading");
-  $("rcptReadingText").textContent = sample ? "Reading sample receipt…" : "Reading the receipt with Claude…";
+  $("rcptReadingText").textContent = sample ? "Reading sample receipt…" : "Reading the receipt with Google Cloud Vision…";
   let readErr = "";
   if (sample) {
     await new Promise(r=>setTimeout(r, 900));
@@ -1050,10 +1126,10 @@ async function readRcpt(url, sample, file){
   } else {
     rcpt = {store:"", date:TODAY_ISO, total:0, pay:"cash", items:[["","Food",0]]};
     try {
-      const d = await readWithClaude(file);
+      const d = await readWithVision(file);
       rcpt = {store:d.store || "", date:/^\d{4}-\d{2}-\d{2}$/.test(d.date||"") ? d.date : TODAY_ISO, total:d.total || 0, pay:payFrom(d),
               items:(d.items && d.items.length ? d.items.map(i=>[i.name, i.category, i.amount]) : [["", "Food", d.total || 0]])};
-      if (!d.total) readErr = "Claude could not find a total on this photo. Enter the details by hand.";
+      if (!d.total) readErr = "No total was found on this photo. Enter the details by hand.";
     } catch(e){ readErr = `${e.message} You can enter the details by hand.`; }
   }
   {
@@ -1062,7 +1138,7 @@ async function readRcpt(url, sample, file){
     $("rStore").value = rcpt.store; $("rTotal").value = rcpt.total || ""; $("rDate").value = rcpt.date;
     $("rPay").innerHTML = Object.entries(CARDS).map(([k,c])=>`<option value="${k}" ${k===rcpt.pay?"selected":""}>${k==="cash"?"Cash":c.name+" "+c.label}</option>`).join("");
     $("rErr").textContent = readErr;
-    $("rNote").textContent = sample ? "Sample receipt. Check the details, then save." : readErr ? "Reading did not work this time." : "Read by Claude. Check the amounts before saving.";
+    $("rNote").textContent = sample ? "Sample receipt. Check the details, then save." : readErr ? "Reading did not work this time." : "Read by Google Cloud Vision. Check the store, total and items before saving.";
     renderRcptItems(); updateRcpt();
     rcptStep("review");
     if (!sample && readErr) $("rStore").focus();
@@ -1286,11 +1362,15 @@ function openSettings(){
   $("sDataNote").textContent = SAMPLE ? "You are looking at sample data. Clear it to start tracking your own month." : `Your data: ${TX.length} charges, ${BACKS.length} paybacks, ${WISH.length} wishlist items.`;
 }
 $("openSettings").addEventListener("click", openSettings);
-const appKey = () => { try { return localStorage.getItem("mf-app-key") || ""; } catch(e){ return ""; } };
+const visionKey = () => { try { return localStorage.getItem("mf-vision-key") || ""; } catch(e){ return ""; } };
+const keyNote = () => $("sKeyNote").textContent = visionKey() ? "A key is saved on this phone. Enter a new one to replace it." : "No key yet. Receipts can still be entered by hand.";
+$("openSettings").addEventListener("click", keyNote);
 $("keyForm").addEventListener("submit", e=>{
   e.preventDefault();
-  try { localStorage.setItem("mf-app-key", $("sAppKey").value.trim()); } catch(err){}
-  $("sAppKey").value = ""; toast("Reading key saved on this phone");
+  const v = $("sAppKey").value.trim();
+  if (!v) return toast("Enter the API key first");
+  try { localStorage.setItem("mf-vision-key", v); } catch(err){}
+  $("sAppKey").value = ""; keyNote(); toast("Vision API key saved on this phone");
 });
 $("setForm").addEventListener("submit", e=>{
   e.preventDefault();

@@ -1,5 +1,4 @@
-// myfinance: app/ の静的ファイル（worker/static.js に同梱）を配信し、/api/receipt だけ処理する
-import { readReceipt } from "./receipt.js";
+// myfinance: app/ の静的ファイル（worker/static.js に同梱）を配信する。レシートの読み取りはスマホから Google Cloud Vision を直接呼ぶ
 import { FILES } from "./static.js";
 
 const SECURITY = {
@@ -17,9 +16,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     let res;
-    if (url.pathname === "/api/receipt") {
-      res = await readReceipt(request, env);
-    } else if (request.method !== "GET" && request.method !== "HEAD") {
+    if (request.method !== "GET" && request.method !== "HEAD") {
       res = new Response("Method not allowed", { status: 405 });
     } else {
       const path = url.pathname === "/" ? "/index.html" : url.pathname;

@@ -8,4 +8,4 @@
 - Amazon and PayPay come in from screenshots only. No spreadsheets for them.
 - Card statements (freee, Amex) are connected after release.
 - Style: Night (navy cards, cyan for actions, lime for money, rounded). See design-system/.
-- Receipt photos are read by Claude (claude-opus-5-5) through `worker/receipt.js`. The Claude API key lives only in the Worker secret `ANTHROPIC_API_KEY`. Optional secret `APP_KEY` limits who can use the reader; the phone stores the matching key under ••• settings.
+- Receipt photos are read with Google Cloud Vision (TEXT detection), the same API and key as Smart Ledger. The key is saved only on the phone (••• settings) and the phone calls Vision directly. The text is turned into store, date, total, payment and items in the app.
