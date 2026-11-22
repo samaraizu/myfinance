@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "myfinance",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "./app", "binding": "ASSETS", "run_worker_first": true },
+  "observability": { "enabled": true }
+}

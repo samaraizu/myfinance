@@ -1,5 +1,5 @@
 // レシート写真を Claude で読み取り、店名・日付・合計・支払い方法・品目を JSON で返す
-// 必要な環境変数（Vercel の Project Settings → Environment Variables）:
+// 必要な Secret（Cloudflare: Workers → myfinance → Settings → Variables and Secrets）:
 //   ANTHROPIC_API_KEY  … Claude API キー（必須）
 //   APP_KEY            … 任意。設定するとアプリ側の「Reading key」と一致するときだけ読み取る
 import Anthropic from "@anthropic-ai/sdk";
@@ -40,16 +40,19 @@ const INSTRUCTIONS = `Read this receipt (usually Japanese) and fill in the field
 - Pick each item's category from the list by what the item is. Food is groceries and meals; Cafe is coffee and drinks bought to have there; Household is daily goods.
 - If the image is not a receipt or is unreadable, return store "", total 0 and no items.`;
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ error: "Use POST" });
-  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: "Receipt reading is not set up yet. Add ANTHROPIC_API_KEY in Vercel." });
-  if (process.env.APP_KEY && req.headers["x-app-key"] !== process.env.APP_KEY) return res.status(401).json({ error: "Reading key does not match. Check it in ••• settings." });
+const json = (status, data) => new Response(JSON.stringify(data), {status, headers: {"Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store"}});
 
-  const { image, mediaType } = req.body || {};
-  if (typeof image !== "string" || !image || !MEDIA.includes(mediaType)) return res.status(400).json({ error: "Send a JPEG, PNG, WebP or GIF image" });
-  if (image.length > 4_000_000) return res.status(413).json({ error: "Photo is too large. Try again with a smaller photo." });
+export async function readReceipt(request, env) {
+  if (request.method !== "POST") return json(405, { error: "Use POST" });
+  if (!env.ANTHROPIC_API_KEY) return json(503, { error: "Receipt reading is not set up yet. Add the ANTHROPIC_API_KEY secret in Cloudflare." });
+  if (env.APP_KEY && request.headers.get("x-app-key") !== env.APP_KEY) return json(401, { error: "Reading key does not match. Check it in ••• settings." });
 
-  const client = new Anthropic();
+  const body = await request.json().catch(() => ({}));
+  const { image, mediaType } = body;
+  if (typeof image !== "string" || !image || !MEDIA.includes(mediaType)) return json(400, { error: "Send a JPEG, PNG, WebP or GIF image" });
+  if (image.length > 4_000_000) return json(413, { error: "Photo is too large. Try again with a smaller photo." });
+
+  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   try {
     const response = await client.beta.messages.create({
       model: "claude-opus-5-5",
@@ -65,18 +68,18 @@ export default async function handler(req, res) {
         ],
       }],
     });
-    if (response.stop_reason === "refusal") return res.status(422).json({ error: "This photo could not be read. Enter the details by hand." });
-    if (response.stop_reason === "max_tokens") return res.status(422).json({ error: "The receipt was too long to read. Enter the details by hand." });
+    if (response.stop_reason === "refusal") return json(422, { error: "This photo could not be read. Enter the details by hand." });
+    if (response.stop_reason === "max_tokens") return json(422, { error: "The receipt was too long to read. Enter the details by hand." });
     const text = response.content.filter(b => b.type === "text").map(b => b.text).join("");
     const data = JSON.parse(text);
     data.items = (data.items || []).filter(i => Number.isInteger(i.amount) && i.amount > 0).map(i => ({ ...i, category: CATEGORIES.includes(i.category) ? i.category : "Other" }));
-    return res.status(200).json(data);
+    return json(200, data);
   } catch (error) {
-    if (error instanceof Anthropic.AuthenticationError) return res.status(502).json({ error: "The Claude API key in Vercel is not valid." });
-    if (error instanceof Anthropic.RateLimitError) return res.status(429).json({ error: "Too many readings right now. Try again in a minute." });
-    if (error instanceof Anthropic.BadRequestError) return res.status(400).json({ error: "Claude could not take this photo. Try a JPEG or PNG." });
-    if (error instanceof Anthropic.APIError) return res.status(502).json({ error: `Claude returned an error (${error.status}). Try again.` });
-    if (error instanceof SyntaxError) return res.status(502).json({ error: "The reading came back incomplete. Try again." });
-    return res.status(500).json({ error: "Reading failed. Try again." });
+    if (error instanceof Anthropic.AuthenticationError) return json(502, { error: "The Claude API key in Cloudflare is not valid." });
+    if (error instanceof Anthropic.RateLimitError) return json(429, { error: "Too many readings right now. Try again in a minute." });
+    if (error instanceof Anthropic.BadRequestError) return json(400, { error: "Claude could not take this photo. Try a JPEG or PNG." });
+    if (error instanceof Anthropic.APIError) return json(502, { error: `Claude returned an error (${error.status}). Try again.` });
+    if (error instanceof SyntaxError) return json(502, { error: "The reading came back incomplete. Try again." });
+    return json(500, { error: "Reading failed. Try again." });
   }
 }
