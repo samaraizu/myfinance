@@ -90,6 +90,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .free.num{font-size:16px!important}
 .legend .num,.back-sum .num,.match b{font-size:16px!important}
 .scale.num,.scale.num span{font-size:12px!important;font-weight:500;color:var(--muted)}
+.card h2 .ttl{display:inline-block;color:var(--ink);border:1.5px solid var(--ink);border-radius:0;padding:3px 8px;letter-spacing:.08em;text-transform:uppercase;font-weight:800}
+.night-hero .hero-date{margin:0 0 -8px;color:var(--muted);letter-spacing:.04em}
 /* スタイル切り替え（試作用） */
 .styles{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
 .styles::-webkit-scrollbar{display:none}
@@ -343,6 +345,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   </header>
 
   <div class="night-hero" id="nightHero">
+    <p class="hero-date num" id="heroDate"></p>
     <h2 data-month>November</h2>
     <p>Budget <span data-budget>¥100,000</span> · <span data-daysleft>11</span> days left</p>
     <button class="pillbtn" type="button" id="nightAdd" hidden>＋ Add</button>
@@ -1398,6 +1401,13 @@ function applyStyle(){
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", isDark() ? st.bgDark : st.bgLight);
 }
 $("nightAdd").addEventListener("click", ()=>toggleMenu(true));
+// ブロック見出しの文字を四角で囲む
+document.querySelectorAll("section.card > h2").forEach(h=>{
+  const t = [...h.childNodes].find(n=>n.nodeType===3 && n.textContent.trim());
+  if (t){ const box = document.createElement("span"); box.className = "ttl"; box.textContent = t.textContent.trim(); h.replaceChild(box, t); }
+});
+// FV の日付
+$("heroDate").textContent = TODAY.toLocaleDateString("en-US", {weekday:"short", year:"numeric", month:"short", day:"numeric"});
 // Summary / Details タブ
 function showTab(tab){
   document.querySelectorAll("section.card[data-tab]").forEach(sec=>sec.hidden = sec.dataset.tab !== tab);
