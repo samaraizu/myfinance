@@ -24,6 +24,10 @@
     {
       "id": "act-2026-11-23-remove-sample-wish",
       "type": "remove-sample-wish"
+    },
+    {
+      "id": "act-2026-11-23-remove-all-samples",
+      "type": "remove-all-samples"
     }
   ]
 }

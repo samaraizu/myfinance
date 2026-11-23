@@ -707,7 +707,7 @@ const TODAY = new Date();
 const DAY = TODAY.getDate(), DAYS = new Date(TODAY.getFullYear(), TODAY.getMonth()+1, 0).getDate();
 const TODAY_MD = `${TODAY.getMonth()+1}/${DAY}`;
 const TODAY_ISO = `${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,"0")}-${String(DAY).padStart(2,"0")}`;
-let BUDGET = 100000, SAMPLE = true, FREEE_SYNC = "";
+let BUDGET = 100000, SAMPLE = true, FREEE_SYNC = "", COUNT_TOKEN = 0;
 const esc = v => String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const yen = n => (n < 0 ? "-¥" : "¥") + Math.abs(Math.round(n)).toLocaleString("en-US");
 const $ = id => document.getElementById(id);
@@ -813,6 +813,7 @@ function render(){
   $("scaleMid").textContent = k(BUDGET/2); $("scaleMax").textContent = k(BUDGET);
   $("free").textContent = yen(free); $("free").classList.toggle("neg", free < 0);
   $("miniFree").textContent = yen(BUDGET - spent);
+  COUNT_TOKEN++;  // 数え上げ中に中身が変わったら、最新の金額を優先する
   $("heroSpent").textContent = yen(spent); $("heroLeft").textContent = yen(BUDGET - spent);
   $("perDay").textContent = yen(Math.max(free,0)/daysLeft);
   const pill = $("pacePill");
@@ -1686,6 +1687,15 @@ render();
       if (!act.id || seen.includes(act.id)) continue;
       seen.push(act.id);
       if (act.type==="remove-sample-wish"){ const before = WISH.length; WISH = WISH.filter(w=>!SAMPLE_IDS.has(w.id)); n += before - WISH.length; }
+      if (act.type==="remove-all-samples"){
+        const before = TX.length + BACKS.length + WISH.length;
+        TX = TX.filter(t=>!SAMPLE_IDS.has(t.id));
+        const txIds = new Set(TX.map(t=>t.id));
+        BACKS = BACKS.filter(b=>!SAMPLE_IDS.has(b.id) && txIds.has(b.tx));
+        WISH = WISH.filter(w=>!SAMPLE_IDS.has(w.id));
+        SAMPLE = false; filter = "All"; cardFilter = "all";
+        n += before - (TX.length + BACKS.length + WISH.length);
+      }
     }
     try { localStorage.setItem("mf-inbox-seen", JSON.stringify(seen)); } catch(e){}
     if (n){ render(); toast(`Wishlist updated (${n})`); }
@@ -1708,7 +1718,7 @@ render();
 })();
 // 開くたびのアニメーション: バーが伸び、数字が数え上がる
 function countUp(el, to, ms){
-  const t0 = performance.now(), step = now => { const k = Math.min(1, (now-t0)/ms), e = 1-Math.pow(1-k,3); el.textContent = yen(to*e); if (k<1) requestAnimationFrame(step); };
+  const token = COUNT_TOKEN, t0 = performance.now(), step = now => { if (token !== COUNT_TOKEN) return; const k = Math.min(1, (now-t0)/ms), e = 1-Math.pow(1-k,3); el.textContent = yen(to*e); if (k<1) requestAnimationFrame(step); };
   requestAnimationFrame(step);
 }
 function playIntro(){
