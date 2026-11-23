@@ -1575,6 +1575,21 @@ $("fDate").value = TODAY_ISO;
 load();
 applyStyle();
 render();
+// リンクで欲しいものを追加: /?wish=<JSON配列をURLエンコード>  [{name, price, cat, prio, note}]
+(()=>{
+  const q = new URLSearchParams(location.search).get("wish"); if (!q) return;
+  try {
+    const list = JSON.parse(q); let n = 0;
+    for (const w of Array.isArray(list) ? list : []){
+      const name = String(w.name||"").slice(0,80).trim(), price = Math.round(+w.price||0);
+      if (!name || price<=0 || WISH.some(x=>x.name===name && x.price===price)) continue;
+      WISH.push({id:"w"+Date.now()+n, name, price, cat: CAT_ORDER.includes(w.cat) ? w.cat : "Other", prio: ["h","m","l"].includes(w.prio) ? w.prio : "m", on:false, note:String(w.note||"").slice(0,60)});
+      n++;
+    }
+    history.replaceState(null, "", "/"); render(); showTab("summary");
+    toast(n ? `Added ${n} item${n>1?"s":""} to the wishlist` : "Those items are already on the wishlist");
+  } catch(e){ history.replaceState(null, "", "/"); toast("That wishlist link could not be read"); }
+})();
 if (new URLSearchParams(location.search).get("freee")==="connected"){ history.replaceState(null, "", "/"); toast("freee connected"); syncFreee(true); }
 else if (!FREEE_SYNC || Date.now() - new Date(FREEE_SYNC) > 10*60*1000) syncFreee(false);
 </script>
