@@ -421,11 +421,6 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <button class="more" type="button" id="moreBacks" hidden></button>
   </section>
 
-  <section class="card" aria-label="By category" data-tab="summary">
-    <h2>By category <span>Tap to filter</span></h2>
-    <div class="cats" id="cats"></div>
-  </section>
-
   <section class="card" aria-label="Wishlist" data-tab="summary">
     <h2>Wishlist <span>Check = buying this month</span></h2>
     <div class="wishes" id="wishes"></div>
@@ -442,6 +437,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     </form>
     <div class="wish-foot"><span>Planned this month <b class="num" id="wishTotal"></b></span><span id="wishHint"></span></div>
   </section>
+
+  <section class="card" aria-label="By category" data-tab="summary">
+    <h2>By category <span>Tap to filter</span></h2>
+    <div class="cats" id="cats"></div>
+  </section>
+
 
 
   <section class="card" aria-label="Charges" id="txCard" data-tab="details" hidden>
