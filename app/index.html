@@ -1697,6 +1697,12 @@ render();
       WISH.push({id:"w"+Date.now()+n, name, price, cat: CAT_ORDER.includes(w.cat) ? w.cat : "Other", prio: ["h","m","l"].includes(w.prio) ? w.prio : "m", on:false, note:String(w.note||"").slice(0,60), img: typeof w.image==="string" && w.image.startsWith("/img/") ? w.image : ""});
       n++;
     }
+    // 受け取り箱の操作（各 id は一度だけ実行）
+    for (const act of box.actions || []){
+      if (!act.id || seen.includes(act.id)) continue;
+      seen.push(act.id);
+      if (act.type==="remove-sample-wish"){ const before = WISH.length; WISH = WISH.filter(w=>!SAMPLE_IDS.has(w.id)); n += before - WISH.length; }
+    }
     try { localStorage.setItem("mf-inbox-seen", JSON.stringify(seen)); } catch(e){}
     if (n){ render(); toast(`Wishlist updated (${n})`); }
   } catch(e){}

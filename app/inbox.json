@@ -19,5 +19,11 @@
       "note": "Apple Store",
       "image": "/img/wish/mac-mini.webp"
     }
+  ],
+  "actions": [
+    {
+      "id": "act-2026-11-23-remove-sample-wish",
+      "type": "remove-sample-wish"
+    }
   ]
 }
