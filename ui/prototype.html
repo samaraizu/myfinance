@@ -119,6 +119,24 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .hero-rate .pace{border-left-color:#fff}
 .hero-rate p{color:rgba(255,255,255,.85)!important}
 .night-hero .tabs{border-bottom-color:var(--line)}
+/* 開いたときのアニメーション（.intro の間だけ） */
+@keyframes mf-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes mf-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes mf-fade{from{opacity:0}to{opacity:1}}
+.intro .night-hero{animation:mf-fade .8s ease-out both}
+.intro .hero-date{animation:mf-rise .6s .1s cubic-bezier(.2,.8,.2,1) both}
+.intro .hero-nums>div:nth-child(1){animation:mf-rise .6s .2s cubic-bezier(.2,.8,.2,1) both}
+.intro .hero-nums>div:nth-child(2){animation:mf-rise .6s .3s cubic-bezier(.2,.8,.2,1) both}
+.intro .hero-rate{animation:mf-rise .6s .4s cubic-bezier(.2,.8,.2,1) both}
+.intro .hero-rate .seg.spent{transform-origin:left;animation:mf-grow 1.2s .6s cubic-bezier(.2,.8,.2,1) both}
+.intro .hero-rate .pace{animation:mf-fade .4s 1.5s both}
+.intro section.card:not([hidden]){animation:mf-rise .6s .5s cubic-bezier(.2,.8,.2,1) both}
+.intro section.card:not([hidden])~section.card:not([hidden]){animation-delay:.65s}
+.intro .cat .bar2 i{transform-origin:left;animation:mf-grow 1s .8s cubic-bezier(.2,.8,.2,1) both}
+.intro .cat:nth-child(2) .bar2 i{animation-delay:.86s}.intro .cat:nth-child(3) .bar2 i{animation-delay:.92s}.intro .cat:nth-child(4) .bar2 i{animation-delay:.98s}
+.intro .cat:nth-child(5) .bar2 i{animation-delay:1.04s}.intro .cat:nth-child(6) .bar2 i{animation-delay:1.1s}.intro .cat:nth-child(n+7) .bar2 i{animation-delay:1.16s}
+.intro .wish{animation:mf-rise .5s .7s cubic-bezier(.2,.8,.2,1) both}
+@media (prefers-reduced-motion:reduce){.intro *{animation:none!important}}
 /* スタイル切り替え（試作用） */
 .styles{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
 .styles::-webkit-scrollbar{display:none}
@@ -1594,6 +1612,25 @@ render();
     toast(n ? `Added ${n} item${n>1?"s":""} to the wishlist` : "Those items are already on the wishlist");
   } catch(e){ history.replaceState(null, "", "/"); toast("That wishlist link could not be read"); }
 })();
+// 開くたびのアニメーション: バーが伸び、数字が数え上がる
+function countUp(el, to, ms){
+  const t0 = performance.now(), step = now => { const k = Math.min(1, (now-t0)/ms), e = 1-Math.pow(1-k,3); el.textContent = yen(to*e); if (k<1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+function playIntro(){
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const root = document.documentElement;
+  root.classList.remove("intro"); void root.offsetWidth; root.classList.add("intro");
+  const spent = TX.reduce((a,t)=>a+t.amt,0) - BACKS.filter(b=>b.status==="in").reduce((a,b)=>a+b.amt,0);
+  countUp($("heroSpent"), spent, 1100); countUp($("heroLeft"), BUDGET - spent, 1100);
+  clearTimeout(playIntro.t); playIntro.t = setTimeout(()=>root.classList.remove("intro"), 2600);
+}
+playIntro();
+let hiddenAt = 0;
+document.addEventListener("visibilitychange", ()=>{
+  if (document.hidden) hiddenAt = Date.now();
+  else if (hiddenAt && Date.now()-hiddenAt > 30000) playIntro();  // 30秒以上離れてから戻ったときも再生
+});
 if (new URLSearchParams(location.search).get("freee")==="connected"){ history.replaceState(null, "", "/"); toast("freee connected"); syncFreee(true); }
 else if (!FREEE_SYNC || Date.now() - new Date(FREEE_SYNC) > 10*60*1000) syncFreee(false);
 </script>
