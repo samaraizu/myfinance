@@ -254,8 +254,9 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .cat .bar2 i.p{background:var(--plan)}
 .cat .bar2{position:relative;height:10px;overflow:visible;background:none}
 .cat .bar2::before{content:"";position:absolute;inset:4px 0;background:var(--line)}
-.cat .bar2 .bud{position:absolute;left:0;top:0;bottom:0;border:1px solid var(--ink);background:var(--bg);box-sizing:border-box}
-.cat .bar2 i{position:absolute;left:0;top:2px;bottom:2px}
+.cat .bar2 .bud{position:absolute;left:0;top:0;bottom:0;background:var(--bg)}
+.cat .bar2 .bud::after{content:"";position:absolute;inset:0;border:1px solid var(--ink);z-index:2;pointer-events:none}
+.cat .bar2 i{position:absolute;left:0;top:0;bottom:0;height:auto;z-index:1}
 .cat .bar2 i.p{left:auto}
 .cat.over .bar2 i:not(.p){background:linear-gradient(90deg,#ff6b6b,#e02424)!important}
 .cat.over .num{color:#e02424}
