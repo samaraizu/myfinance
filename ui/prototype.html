@@ -575,7 +575,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <button class="btn ghost" type="submit">Save key on this phone</button>
   </form>
   <form id="freeeForm" novalidate style="display:grid;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
-    <label class="field">freee card charges · App key<input type="password" id="sFreeeKey" autocomplete="off" placeholder="The APP_KEY secret you set in Cloudflare"></label>
+    <label class="field">App key (sync and freee)<input type="password" id="sFreeeKey" autocomplete="off" placeholder="The APP_KEY secret you set in Cloudflare"></label>
     <p class="lead" style="margin:0" id="sFreeeNote"></p>
     <div class="two">
       <button class="btn ghost" type="submit">Save key</button>
@@ -918,11 +918,50 @@ function render(){
   save();
 }
 
-// 端末内に保存（ログインなし・サーバー送信なし）
+// 保存: 端末に置き、App key があれば Cloudflare にも同期する（どのブラウザでも同じデータ）
 const STORE = "mf-data-v1";
-function save(){
+let DATA_AT = 0, lastSaved = "", pushTimer = null, SYNC_READY = false;
+const snapshot = () => {
   const fcards = Object.fromEntries(Object.entries(CARDS).filter(([k])=>k.startsWith("fc")));
-  try { localStorage.setItem(STORE, JSON.stringify({v:1, budget:BUDGET, sample:SAMPLE, TX, BACKS, WISH, fcards, freeeSync:FREEE_SYNC})); } catch(e){ if (typeof toast==="function") toast("Could not save: phone storage is full. Remove a photo or two."); }
+  let inboxSeen = []; try { inboxSeen = JSON.parse(localStorage.getItem("mf-inbox-seen") || "[]"); } catch(e){}
+  return {v:1, budget:BUDGET, sample:SAMPLE, TX, BACKS, WISH, fcards, freeeSync:FREEE_SYNC, inboxSeen, visionKey: (()=>{ try { return localStorage.getItem("mf-vision-key") || ""; } catch(e){ return ""; } })()};
+};
+function save(){
+  const body = JSON.stringify(snapshot());
+  if (body === lastSaved) return;
+  if (lastSaved) DATA_AT = Date.now();
+  lastSaved = body;
+  try { localStorage.setItem(STORE, body); localStorage.setItem(STORE+"-at", String(DATA_AT)); } catch(e){ if (typeof toast==="function") toast("Could not save: phone storage is full. Remove a photo or two."); }
+  if (SYNC_READY){ clearTimeout(pushTimer); pushTimer = setTimeout(pushData, 1200); }
+}
+function applyData(d){
+  BUDGET = d.budget || BUDGET; SAMPLE = !!d.sample;
+  TX = d.TX || []; BACKS = d.BACKS || []; WISH = d.WISH || [];
+  Object.assign(CARDS, d.fcards || {}); FREEE_SYNC = d.freeeSync || FREEE_SYNC || "";
+  try {
+    if (Array.isArray(d.inboxSeen)){ const mine = JSON.parse(localStorage.getItem("mf-inbox-seen") || "[]"); localStorage.setItem("mf-inbox-seen", JSON.stringify([...new Set([...mine, ...d.inboxSeen])])); }
+    if (d.visionKey && !localStorage.getItem("mf-vision-key")) localStorage.setItem("mf-vision-key", d.visionKey);
+  } catch(e){}
+}
+async function pushData(){
+  if (!appKey()) return;
+  try {
+    const r = await fetch("/api/data", {method:"PUT", headers:{"Content-Type":"application/json","X-App-Key":appKey()}, body: JSON.stringify({updatedAt: DATA_AT || Date.now(), data: JSON.parse(lastSaved)})});
+    if (r.status === 409){ const cur = await r.json(); DATA_AT = cur.updatedAt; applyData(cur.data); lastSaved = ""; render(); toast("Updated with newer data from another device"); }
+  } catch(e){}
+}
+async function pullData(){
+  if (!appKey()) return;
+  try {
+    const r = await fetch("/api/data", {headers:{"X-App-Key":appKey()}, cache:"no-store"});
+    if (r.status === 404){ try { localStorage.setItem("mf-synced","1"); } catch(e){} SYNC_READY = true; DATA_AT = DATA_AT || Date.now(); pushData(); return; }
+    if (!r.ok) return;
+    const cur = await r.json();
+    // この端末で初めて同期するときは、クラウドの内容を優先する（受け取り箱などの小さな変更で上書きしない）
+    let synced = false; try { synced = localStorage.getItem("mf-synced")==="1"; localStorage.setItem("mf-synced","1"); } catch(e){}
+    if (!synced || cur.updatedAt > DATA_AT){ applyData(cur.data); DATA_AT = cur.updatedAt; lastSaved = ""; SYNC_READY = true; render(); if (!synced) runInbox(); return; }
+    SYNC_READY = true; if (DATA_AT > cur.updatedAt) pushData();
+  } catch(e){}
 }
 function load(){
   try {
@@ -931,6 +970,7 @@ function load(){
     BUDGET = d.budget || BUDGET; SAMPLE = !!d.sample;
     TX = d.TX || []; BACKS = d.BACKS || []; WISH = d.WISH || [];
     Object.assign(CARDS, d.fcards || {}); FREEE_SYNC = d.freeeSync || "";
+    DATA_AT = +localStorage.getItem(STORE+"-at") || 0;
   } catch(e){}
 }
 const SAMPLE_COPY = JSON.stringify({TX, BACKS, WISH});
@@ -1680,7 +1720,7 @@ $("freeeForm").addEventListener("submit", e=>{
   e.preventDefault();
   const v = $("sFreeeKey").value.trim(); if (!v) return toast("Enter the App key first");
   try { localStorage.setItem("mf-app-key", v); } catch(err){}
-  $("sFreeeKey").value = ""; freeeNote(); toast("App key saved on this phone");
+  $("sFreeeKey").value = ""; freeeNote(); toast("App key saved. Syncing your data…"); pullData().then(()=>syncFreee(false));
 });
 $("sFreeeConnect").addEventListener("click", ()=>{
   if (!appKey()) return toast("Save the App key first");
@@ -1693,7 +1733,7 @@ load();
 applyStyle();
 render();
 // 受け取り箱: /inbox.json に置かれた欲しいものを、まだ取り込んでいない分だけ追加する（ホーム画面のアプリでも届く）
-(async()=>{
+const runInbox = (async()=>{
   try {
     const r = await fetch("/inbox.json", {cache:"no-store"}); if (!r.ok) return;
     const box = await r.json(); let seen = [];
@@ -1735,7 +1775,7 @@ render();
     try { localStorage.setItem("mf-inbox-seen", JSON.stringify(seen)); } catch(e){}
     if (n){ render(); toast(`Wishlist updated (${n})`); }
   } catch(e){}
-})();
+});
 // リンクで欲しいものを追加: /?wish=<JSON配列をURLエンコード>  [{name, price, cat, prio, note}]
 (()=>{
   const q = new URLSearchParams(location.search).get("wish"); if (!q) return;
@@ -1770,6 +1810,13 @@ document.addEventListener("visibilitychange", ()=>{
   if (document.hidden) hiddenAt = Date.now();
   else if (hiddenAt && Date.now()-hiddenAt > 30000) playIntro();  // 30秒以上離れてから戻ったときも再生
 });
-if (new URLSearchParams(location.search).get("freee")==="connected"){ history.replaceState(null, "", "/"); toast("freee connected"); syncFreee(true); }
-else if (!FREEE_SYNC || Date.now() - new Date(FREEE_SYNC) > 10*60*1000) syncFreee(false);
+// 起動の順番: クラウドのデータを取ってから、受け取り箱と freee の明細を重ねる
+(async()=>{
+  await pullData();
+  await runInbox();
+  if (new URLSearchParams(location.search).get("freee")==="connected"){ history.replaceState(null, "", "/"); toast("freee connected"); syncFreee(true); }
+  else if (!FREEE_SYNC || Date.now() - new Date(FREEE_SYNC) > 10*60*1000) syncFreee(false);
+})();
+// アプリに戻ってきたときも、ほかの端末での変更を取り込む
+document.addEventListener("visibilitychange", ()=>{ if (!document.hidden) pullData(); });
 </script>

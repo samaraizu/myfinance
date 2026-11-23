@@ -2,7 +2,7 @@
 
 - Phone-only web app. Opened from the home screen (PWA) at https://myfinance.toneclown17.workers.dev. No app store.
 - Hosting: Cloudflare Worker `myfinance` (same account as the other projects). Vercel is not used. Deploy with `npm run deploy` (builds app/ and bundles it into worker/static.js).
-- No login. Data stays on the phone (localStorage); nothing is sent to a server.
+- No login. Data is kept on the device and, once the App key is entered, synced to Workers KV (`app_data`) through `/api/data`, so every browser with the same App key sees the same data. Last write wins; a device's first sync takes the cloud copy.
 - Receipts are registered only in myfinance (＋ → Add a receipt). Smart Ledger (samaraizu/smart-ledger) is retired: its Firebase data was deleted. Keep the GCP project `smart-ledger-ea931`, because myfinance uses its Cloud Vision key.
 - A receipt matched to a card charge splits that charge by item. A cash receipt, or one with no charge yet, is added as spending.
 - Amazon and PayPay come in from screenshots only. No spreadsheets for them.
