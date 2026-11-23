@@ -1,5 +1,5 @@
 // オフラインでも開けるように、アプリ本体をキャッシュ（ページはネット優先、失敗時にキャッシュ）
-const CACHE = "myfinance-v4";
+const CACHE = "myfinance-v5";
 const SHELL = ["/", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/img/hero.webp"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener("activate", e => {
