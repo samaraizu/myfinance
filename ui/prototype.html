@@ -1841,6 +1841,11 @@ const runInbox = (async()=>{
       if (!act.id || seen.includes(act.id)) continue;
       seen.push(act.id);
       if (act.type==="remove-sample-wish"){ const before = WISH.length; WISH = WISH.filter(w=>!SAMPLE_IDS.has(w.id)); n += before - WISH.length; }
+      if (act.type==="set-category" && CAT_ORDER.includes(act.cat)){
+        const t = TX.find(x=>x.id===act.tx);
+        if (t){ if (t.splits) t.splits.forEach(x=>x[1]=act.cat); else t.cat = act.cat; t.catManual = true; t.disDone = true; n++; }
+        else seen.pop();  // 明細がまだ届いていなければ、次回もう一度試す
+      }
       if (act.type==="set-cat-budget" && act.budgets && typeof act.budgets==="object"){
         CAT_BUDGET = Object.fromEntries(Object.entries(act.budgets).filter(([c,v])=>CAT_ORDER.includes(c) && +v>0).map(([c,v])=>[c, Math.round(+v)])); n++;
       }

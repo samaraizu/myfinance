@@ -52,6 +52,12 @@
       "match": "11インチiPad Air Wi-Fi 128GB スペースグレイ",
       "name": "iPad Air",
       "detail": "11インチ iPad Air Wi-Fiモデル 128GB スペースグレイ"
+    },
+    {
+      "id": "dis-maruetsu-1114",
+      "type": "set-category",
+      "tx": "f2552712221",
+      "cat": "dis"
     }
   ]
 }
