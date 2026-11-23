@@ -1708,7 +1708,8 @@ render();
       if (act.type==="remove-sample-wish"){ const before = WISH.length; WISH = WISH.filter(w=>!SAMPLE_IDS.has(w.id)); n += before - WISH.length; }
       if (act.type==="update-wish"){
         const w = WISH.find(x=>x.name===act.match);
-        if (w){ for (const k of ["name","detail","note"]) if (typeof act[k]==="string") w[k] = act[k]; n++; }
+        if (w && act.name && WISH.some(x=>x!==w && x.name===act.name && x.price===w.price)) { WISH = WISH.filter(x=>x!==w); n++; }  // 同じ品がもうあれば重複を消す
+        else if (w){ for (const k of ["name","detail","note"]) if (typeof act[k]==="string") w[k] = act[k]; n++; }
       }
       if (act.type==="remove-all-samples"){
         const before = TX.length + BACKS.length + WISH.length;
