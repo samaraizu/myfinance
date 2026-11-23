@@ -33,7 +33,7 @@ print("app/index.html", len(page))
 # Worker に同梱する静的ファイル（app/ の中身）を worker/static.js に書き出す
 import base64, json
 TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
-         ".webmanifest": "application/manifest+json", ".png": "image/png", ".json": "application/json"}
+         ".webmanifest": "application/manifest+json", ".png": "image/png", ".webp": "image/webp", ".json": "application/json"}
 files = {}
 for f in sorted((root / "app").rglob("*")):
     if f.is_file() and f.suffix in TYPES:

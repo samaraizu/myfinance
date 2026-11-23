@@ -102,6 +102,20 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .hero-rate .seg.plan{display:none}
 .hero-rate .pace{top:-4px;bottom:-4px;border-left:2px solid var(--ink)}
 .hero-rate p{margin:0;text-align:right;color:var(--muted)}
+/* FV: 写真の上にすりガラスの面を重ねて文字を読みやすくする */
+.skin-night .night-hero{position:relative;min-height:340px;align-content:end;padding:20px 16px 0;gap:12px;
+  background:linear-gradient(180deg, transparent 35%, color-mix(in srgb,var(--bg) 55%,transparent) 80%, var(--bg) 100%), url("/img/hero.webp") center 30%/cover no-repeat, var(--bg)}
+.glass{background:color-mix(in srgb,#0b0d12 38%,transparent);-webkit-backdrop-filter:blur(14px) saturate(140%);backdrop-filter:blur(14px) saturate(140%);border:1px solid rgba(255,255,255,.35);color:#fff}
+.night-hero .hero-date{margin:0;justify-self:center;padding:4px 12px;border-radius:999px;color:#fff}
+.hero-nums div{border:1px solid rgba(255,255,255,.35)!important;border-radius:12px}
+.hero-nums small{color:rgba(255,255,255,.78)!important}
+.hero-nums b{color:#fff!important}
+.hero-rate{padding:10px 12px;border-radius:12px}
+.hero-rate .meter{background:rgba(255,255,255,.28)}
+.hero-rate .seg.spent{background:#fff}
+.hero-rate .pace{border-left-color:#fff}
+.hero-rate p{color:rgba(255,255,255,.85)!important}
+.night-hero .tabs{border-bottom-color:var(--line)}
 /* スタイル切り替え（試作用） */
 .styles{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
 .styles::-webkit-scrollbar{display:none}
@@ -355,12 +369,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   </header>
 
   <div class="night-hero" id="nightHero">
-    <p class="hero-date num" id="heroDate"></p>
+    <p class="hero-date num glass" id="heroDate"></p>
     <div class="hero-nums">
-      <div><small>Spent this month</small><b class="num" id="heroSpent"></b></div>
-      <div><small>Budget left</small><b class="num" id="heroLeft"></b></div>
+      <div class="glass"><small>Spent this month</small><b class="num" id="heroSpent"></b></div>
+      <div class="glass"><small>Budget left</small><b class="num" id="heroLeft"></b></div>
     </div>
-    <div class="hero-rate">
+    <div class="hero-rate glass">
       <div class="meter">
         <div class="seg spent" id="segSpent"></div>
         <div class="seg plan" id="segPlan"></div>
