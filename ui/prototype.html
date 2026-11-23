@@ -92,6 +92,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .scale.num,.scale.num span{font-size:12px!important;font-weight:500;color:var(--muted)}
 .card h2 .ttl{display:inline-block;color:var(--ink);border:1.5px solid var(--ink);border-radius:0;padding:3px 8px;letter-spacing:.08em;text-transform:uppercase;font-weight:800}
 .night-hero .hero-date{margin:0 0 -8px;color:var(--muted);letter-spacing:.04em}
+.hero-nums{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%}
+.hero-nums div{display:grid;gap:2px;justify-items:center;padding:12px 8px;border:1.5px solid var(--ink)}
+.hero-nums small{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.catsel{margin:2px 0 6px}
+.catsel select{min-height:44px}
 /* スタイル切り替え（試作用） */
 .styles{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
 .styles::-webkit-scrollbar{display:none}
@@ -341,13 +346,15 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 <div class="app">
   <header class="bar" id="bar">
     <h1><span data-month>November</span><small><span class="num" data-daysleft>11</span> days left</small></h1>
-    <div class="mini">Free to spend <b id="miniFree"></b></div>
+    <div class="mini">Budget left <b id="miniFree"></b></div>
   </header>
 
   <div class="night-hero" id="nightHero">
     <p class="hero-date num" id="heroDate"></p>
-    <h2 data-month>November</h2>
-    <p>Budget <span data-budget>¥100,000</span> · <span data-daysleft>11</span> days left</p>
+    <div class="hero-nums">
+      <div><small>Spent this month</small><b class="num" id="heroSpent"></b></div>
+      <div><small>Budget left</small><b class="num" id="heroLeft"></b></div>
+    </div>
     <button class="pillbtn" type="button" id="nightAdd" hidden>＋ Add</button>
     <div class="tabs" role="tablist" aria-label="Views">
       <button type="button" role="tab" id="tabSummary" aria-selected="true" data-tab="summary">Summary</button>
@@ -365,16 +372,10 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <span class="src">Receipts <b id="rcptCount">14</b></span>
   </div>
 
-  <section class="card" aria-label="Budget" data-tab="summary">
-    <h2>Summary</h2>
-    <div class="free-label">Left to spend, wishlist included (budget <span data-budget>¥100,000</span>)</div>
-    <div class="free num" id="free">¥0</div>
-    <div class="hero-sub">
-      <span class="pill ok" id="pacePill"></span>
-      <span class="perday">Per day <b class="num" id="perDay"></b></span>
-    </div>
-    <div class="netline" id="netline"></div>
-  </section>
+  <div hidden aria-hidden="true">
+    <span data-budget></span><span class="free num" id="free"></span><span class="pill ok" id="pacePill"></span>
+    <b id="perDay"></b><div id="netline"></div>
+  </div>
 
   <section class="card" aria-label="Spending rate" data-tab="summary">
     <h2>Spending rate <span class="num" id="rateTxt"></span></h2>
@@ -402,6 +403,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <button class="more" type="button" id="moreBacks" hidden></button>
   </section>
 
+  <section class="card" aria-label="By category" data-tab="summary">
+    <h2>By category <span>Tap to filter</span></h2>
+    <div class="cats" id="cats"></div>
+  </section>
+
   <section class="card" aria-label="Wishlist" data-tab="summary">
     <h2>Wishlist <span>Check = buying this month</span></h2>
     <div class="wishes" id="wishes"></div>
@@ -419,20 +425,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <div class="wish-foot"><span>Planned this month <b class="num" id="wishTotal"></b></span><span id="wishHint"></span></div>
   </section>
 
-  <section class="card" aria-label="By category" data-tab="details" hidden>
-    <h2>By category <span>Tap to filter</span></h2>
-    <div class="cats" id="cats"></div>
-  </section>
 
   <section class="card" aria-label="Charges" id="txCard" data-tab="details" hidden>
-    <h2>Card charges <span>freee · Amex · Amazon · receipts</span></h2>
-    <div class="match">
-      <span>Receipt match <b id="mOk"></b></span>
-      <span>Itemized <b id="mSplit"></b></span>
-      <span class="warn">Needs receipt <b id="mMiss"></b></span>
-    </div>
+    <h2>Card charges <span>freee and receipts</span></h2>
+    <div hidden><b id="mOk"></b><b id="mSplit"></b><b id="mMiss"></b></div>
     <div class="chips" id="cardFilters"></div>
-    <div class="chips" id="filters"></div>
+    <label class="field catsel">Category<select id="filters" aria-label="Filter by category"></select></label>
     <ul class="tx" id="tx"></ul>
     <div class="tx-foot"><span id="txCount"></span><span class="num" id="txSum"></span></div>
   </section>
@@ -444,8 +442,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 </div>
 
 <div class="menu" id="menu" role="menu" hidden>
-  <button type="button" role="menuitem" id="goAmex"><span class="ic">AMEX</span><span><b>Import Amex</b><small>From a payment screenshot</small></span></button>
-  <button type="button" role="menuitem" id="goAmz"><span class="ic">AMZN</span><span><b>Import Amazon</b><small>From an order history screenshot</small></span></button>
+  <button type="button" role="menuitem" id="goAmex" hidden><span class="ic">AMEX</span><span><b>Import Amex</b><small>From a payment screenshot</small></span></button>
+  <button type="button" role="menuitem" id="goAmz" hidden><span class="ic">AMZN</span><span><b>Import Amazon</b><small>From an order history screenshot</small></span></button>
   <button type="button" role="menuitem" id="goPP"><span class="ic">PAY</span><span><b>Import PayPay</b><small>From a transfer history screenshot</small></span></button>
   <button type="button" role="menuitem" id="goRcpt"><span class="ic">RCPT</span><span><b>Add a receipt</b><small>Take a photo or pick from library</small></span></button>
   <button type="button" role="menuitem" id="goBack"><span class="ic">¥</span><span><b>Log a payback</b><small>Cash or PayPay you got back</small></span></button>
@@ -747,7 +745,8 @@ function render(){
   const k = v => (v>=10000 && v%1000===0) ? (v/1000).toLocaleString("en-US")+"k" : yen(v);
   $("scaleMid").textContent = k(BUDGET/2); $("scaleMax").textContent = k(BUDGET);
   $("free").textContent = yen(free); $("free").classList.toggle("neg", free < 0);
-  $("miniFree").textContent = yen(free);
+  $("miniFree").textContent = yen(BUDGET - spent);
+  $("heroSpent").textContent = yen(spent); $("heroLeft").textContent = yen(BUDGET - spent);
   $("perDay").textContent = yen(Math.max(free,0)/daysLeft);
   const pill = $("pacePill");
   if (free < 0){ pill.className="pill bad"; pill.textContent = "Over by "+yen(-free)+" with plans"; }
@@ -819,8 +818,8 @@ function render(){
   $("mMiss").textContent = TX.filter(t=>t.st==="miss").length;
   $("cardFilters").innerHTML = [["all","All cards"], ...[...new Set(TX.map(t=>t.card))].filter(k=>CARDS[k]).map(k=>[k, short(k)])]
     .map(([k,l])=>`<button class="chip" aria-pressed="${cardFilter===k}" data-card="${k}">${l}</button>`).join("");
-  $("filters").innerHTML = ["All", ...CAT_ORDER.filter(c=>byCat[c].s>0)]
-    .map(c=>`<button class="chip" aria-pressed="${filter===c}" data-cat="${c}">${c}</button>`).join("");
+  $("filters").innerHTML = ["All", ...CAT_ORDER.filter(c=>byCat[c].s>0 || c===filter)]
+    .map(c=>`<option value="${c}" ${filter===c?"selected":""}>${c==="All"?"All categories":c}</option>`).join("");
 
   const rows = TX.filter(t => (cardFilter==="all" || t.card===cardFilter)
     && (filter==="All" || (t.splits ? t.splits.some(s=>s[1]===filter) : t.cat===filter)));
@@ -1365,6 +1364,7 @@ $("addForm").addEventListener("submit", e=>{
   toast(`Saved ${yen(amt)} from ${who}${pend?" as pending":""}`);
 });
 
+$("filters").addEventListener("change", e=>{ filter = e.target.value; render(); });
 document.addEventListener("change", e => {
   const id = e.target.dataset && e.target.dataset.wish;
   if (id){ WISH = WISH.map(w => w.id===id ? {...w, on:e.target.checked} : w); render(); $(id)?.focus(); }
@@ -1372,7 +1372,7 @@ document.addEventListener("change", e => {
 document.addEventListener("click", e => {
   const c = e.target.closest("[data-cat]");
   if (c){ const v = c.dataset.cat; filter = (filter===v && v!=="All") ? "All" : v; render();
-    if (c.dataset.jump) $("txCard").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion:reduce)").matches ? "auto" : "smooth"});
+    if (c.dataset.jump){ showTab("details"); $("txCard").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion:reduce)").matches ? "auto" : "smooth"}); }
     return; }
   const k = e.target.closest("[data-card]");
   if (k){ cardFilter = k.dataset.card; render(); return; }
