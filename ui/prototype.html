@@ -449,7 +449,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   </section>
 
   <section class="card" aria-label="Wishlist" data-tab="summary">
-    <h2>Wishlist <span>Tap for details</span></h2>
+    <h2>Wishlist <span>Total <b class="num" id="wishAll"></b></span></h2>
     <div class="wishes" id="wishes"></div>
     <button class="more" type="button" id="wishAddOpen">＋ Add an item</button>
     <form class="add-inline" id="wishForm" hidden novalidate>
@@ -863,6 +863,7 @@ function render(){
       <span class="name">${esc(w.name)}</span><span class="num">${yen(w.price)}</span>
     </button>`).join("") : `<div class="empty-note">Nothing on the wishlist yet. Add what you plan to buy.</div>`;
   $("wishTotal").textContent = yen(plan);
+  $("wishAll").textContent = yen(WISH.reduce((a,w)=>a+(+w.price||0),0));
   const nextOff = WISH.filter(w=>!w.on).sort((a,b)=>a.price-b.price)[0];
   $("wishHint").textContent = nextOff
     ? (free - nextOff.price >= 0 ? `Add “${nextOff.name}” and ${yen(free-nextOff.price)} remains` : `Add “${nextOff.name}” and you go ${yen(nextOff.price-free)} over`)
