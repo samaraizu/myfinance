@@ -18,6 +18,16 @@
       "prio": "m",
       "note": "Apple Store",
       "image": "/img/wish/mac-mini.webp"
+    },
+    {
+      "id": "inbox-2026-11-23-ipad-air-restore",
+      "name": "iPad Air",
+      "price": 129800,
+      "cat": "Gadgets",
+      "prio": "m",
+      "note": "Apple Store",
+      "detail": "11インチ iPad Air Wi-Fiモデル 128GB スペースグレイ",
+      "image": "/img/wish/ipad-air.webp"
     }
   ],
   "actions": [
@@ -28,6 +38,20 @@
     {
       "id": "act-2026-11-23-remove-all-samples",
       "type": "remove-all-samples"
+    },
+    {
+      "id": "act-2026-11-23-rename-mac-mini",
+      "type": "update-wish",
+      "match": "M6チップ搭載Mac mini",
+      "name": "Mac mini",
+      "detail": "M6チップ搭載 Mac mini"
+    },
+    {
+      "id": "act-2026-11-23-rename-ipad-air",
+      "type": "update-wish",
+      "match": "11インチiPad Air Wi-Fi 128GB スペースグレイ",
+      "name": "iPad Air",
+      "detail": "11インチ iPad Air Wi-Fiモデル 128GB スペースグレイ"
     }
   ]
 }

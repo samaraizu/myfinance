@@ -156,6 +156,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .ws-photo{position:relative;display:grid;place-items:center;aspect-ratio:4/3;max-width:100%;border:1px dashed var(--line);border-radius:12px;background:var(--bg);overflow:hidden;color:var(--muted);font-size:13px;margin-top:6px}
 .ws-photo img{width:100%;height:100%;object-fit:cover}
 .ws-pick{display:grid;place-items:center;position:relative}
+.field textarea{font:inherit;font-size:16px;font-weight:400;line-height:1.5;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;min-width:0;resize:vertical}
 .ws-pick input{position:absolute;width:1px;height:1px;opacity:0}
 /* スタイル切り替え（試作用） */
 .styles{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
@@ -568,6 +569,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     </div>
     <label class="field">Category<select id="wsCat"></select></label>
     <label class="field">Note<input type="text" id="wsNote" autocomplete="off" maxlength="80" placeholder="Where to buy, size, color"></label>
+    <label class="field">Details<textarea id="wsDetail" rows="5" maxlength="2000" placeholder="Specs, links, why you want it"></textarea></label>
     <label class="chk"><input type="checkbox" id="wsOn">Buying this month (counts toward the budget)</label>
     <div class="err" id="wsErr" role="alert"></div>
     <div class="actions"><button class="btn ghost" type="button" id="wsDelete">Delete</button><button class="btn" type="submit">Save</button></div>
@@ -1563,10 +1565,10 @@ function wishForm(show){
 // 欲しいもの: 一覧はタイトルと金額だけ。タップで詳細シート（写真・メモ・今月買う・削除）
 let wsId = null, wsImgData = null, wsDelArmed = false;
 function openWish(id){
-  const w = WISH.find(x=>x.id===id) || {name:"", price:"", cat:"Other", prio:"m", note:"", on:false, img:""};
+  const w = WISH.find(x=>x.id===id) || {name:"", price:"", cat:"Other", prio:"m", note:"", detail:"", on:false, img:""};
   wsId = id; wsImgData = w.img || ""; wsDelArmed = false;
   $("wsTitle").textContent = id ? "Wishlist item" : "New wishlist item";
-  $("wsName").value = w.name; $("wsPrice").value = w.price || ""; $("wsNote").value = w.note || ""; $("wsOn").checked = !!w.on;
+  $("wsName").value = w.name; $("wsPrice").value = w.price || ""; $("wsNote").value = w.note || ""; $("wsDetail").value = w.detail || ""; $("wsOn").checked = !!w.on;
   $("wsCat").innerHTML = CAT_ORDER.map(c=>`<option ${c===w.cat?"selected":""}>${c}</option>`).join(""); $("wsPrio").value = w.prio || "m";
   $("wsDelete").hidden = !id; $("wsDelete").textContent = "Delete"; $("wsErr").textContent = "";
   showWsImg();
@@ -1592,7 +1594,7 @@ $("wsForm").addEventListener("submit", e=>{
   const name = $("wsName").value.trim(), price = Math.round(+$("wsPrice").value || 0);
   if (!name) return $("wsErr").textContent = "Enter what you want to buy";
   if (price <= 0) return $("wsErr").textContent = "Enter a price of ¥1 or more";
-  const data = {name, price, cat:$("wsCat").value, prio:$("wsPrio").value, note:$("wsNote").value.trim(), on:$("wsOn").checked, img:wsImgData || ""};
+  const data = {name, price, cat:$("wsCat").value, prio:$("wsPrio").value, note:$("wsNote").value.trim(), detail:$("wsDetail").value.trim(), on:$("wsOn").checked, img:wsImgData || ""};
   if (wsId) Object.assign(WISH.find(x=>x.id===wsId), data); else WISH.push({id:"w"+Date.now(), ...data});
   closeAll(); render(); toast(wsId ? `Saved ${name}` : `Added ${name} · ${yen(price)}`);
 });
@@ -1695,7 +1697,7 @@ render();
       seen.push(w.id);
       const name = String(w.name||"").slice(0,80).trim(), price = Math.round(+w.price||0);
       if (!name || price<=0 || WISH.some(x=>x.name===name && x.price===price)) continue;
-      WISH.push({id:"w"+Date.now()+n, name, price, cat: CAT_ORDER.includes(w.cat) ? w.cat : "Other", prio: ["h","m","l"].includes(w.prio) ? w.prio : "m", on:false, note:String(w.note||"").slice(0,60), img: typeof w.image==="string" && w.image.startsWith("/img/") ? w.image : ""});
+      WISH.push({id:"w"+Date.now()+n, name, price, cat: CAT_ORDER.includes(w.cat) ? w.cat : "Other", prio: ["h","m","l"].includes(w.prio) ? w.prio : "m", on:false, note:String(w.note||"").slice(0,60), detail:String(w.detail||"").slice(0,2000), img: typeof w.image==="string" && w.image.startsWith("/img/") ? w.image : ""});
       n++;
     }
     // 受け取り箱の操作（各 id は一度だけ実行）
@@ -1703,6 +1705,10 @@ render();
       if (!act.id || seen.includes(act.id)) continue;
       seen.push(act.id);
       if (act.type==="remove-sample-wish"){ const before = WISH.length; WISH = WISH.filter(w=>!SAMPLE_IDS.has(w.id)); n += before - WISH.length; }
+      if (act.type==="update-wish"){
+        const w = WISH.find(x=>x.name===act.match);
+        if (w){ for (const k of ["name","detail","note"]) if (typeof act[k]==="string") w[k] = act[k]; n++; }
+      }
       if (act.type==="remove-all-samples"){
         const before = TX.length + BACKS.length + WISH.length;
         TX = TX.filter(t=>!SAMPLE_IDS.has(t.id));
