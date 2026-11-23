@@ -2,6 +2,7 @@
 import { FILES } from "./static.js";
 import { handleFreee } from "./freee.js";
 import { handleData } from "./data.js";
+import { handleCal } from "./cal.js";
 
 const SECURITY = {
   "X-Robots-Tag": "noindex",
@@ -20,6 +21,8 @@ export default {
     let res;
     if (url.pathname === "/api/data") {
       res = await handleData(request, env);
+    } else if (url.pathname === "/api/cal/dis") {
+      res = await handleCal(request, env);
     } else if (url.pathname.startsWith("/api/freee/")) {
       res = await handleFreee(request, env);
       if (res.status >= 300 && res.status < 400) return res;  // リダイレクトはそのまま返す

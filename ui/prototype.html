@@ -234,9 +234,19 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .cat .bar2{height:8px;border-radius:0;background:var(--bg);overflow:hidden;display:flex}
 .cat .bar2 i{display:block;height:100%;background:var(--accent)}
 .cat .bar2 i.p{background:var(--plan)}
+.cat .bar2{position:relative;height:10px;overflow:visible;background:none}
+.cat .bar2::before{content:"";position:absolute;inset:4px 0;background:var(--line)}
+.cat .bar2 .bud{position:absolute;left:0;top:0;bottom:0;border:1px solid var(--ink);background:var(--bg);box-sizing:border-box}
+.cat .bar2 i{position:absolute;left:0;top:2px;bottom:2px}
+.cat .bar2 i.p{left:auto}
+.cat.over .bar2 i:not(.p){background:linear-gradient(90deg,#ff6b6b,#e02424)!important}
+.cat.over .num{color:#e02424}
+.cat .num small.of{color:var(--muted);font-size:11px!important;font-weight:400}
 .cat .num{text-align:right;font-size:13px;line-height:1.25}
 .cat small{color:var(--plan);font-size:11px}
 
+.catbud{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.catbud label{display:grid;gap:2px;font-size:12px;color:var(--muted)}
 /* 明細 */
 .match{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .match span{font-size:11px;border-radius:0;padding:2px 10px;background:var(--bg);color:var(--muted)}
@@ -567,6 +577,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   <form id="setForm" novalidate style="display:grid;gap:14px">
     <label class="field">Monthly budget (¥)<input class="amt-in" type="number" id="sBudget" inputmode="numeric" min="1000" step="1000"></label>
     <div class="err" id="sErr" role="alert"></div>
+    <p class="lead" style="margin:6px 0 0">Budget per category (leave blank for none)</p>
+    <div class="catbud" id="sCatBud"></div>
     <button class="btn" type="submit">Save budget</button>
   </form>
   <form id="keyForm" novalidate style="display:grid;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
@@ -716,7 +728,7 @@ const TODAY = new Date();
 const DAY = TODAY.getDate(), DAYS = new Date(TODAY.getFullYear(), TODAY.getMonth()+1, 0).getDate();
 const TODAY_MD = `${TODAY.getMonth()+1}/${DAY}`;
 const TODAY_ISO = `${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,"0")}-${String(DAY).padStart(2,"0")}`;
-let BUDGET = 100000, SAMPLE = true, FREEE_SYNC = "", COUNT_TOKEN = 0;
+let BUDGET = 100000, CAT_BUDGET = {}, DIS_DATES = [], SAMPLE = true, FREEE_SYNC = "", COUNT_TOKEN = 0;
 const esc = v => String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const yen = n => (n < 0 ? "-¥" : "¥") + Math.abs(Math.round(n)).toLocaleString("en-US");
 const $ = id => document.getElementById(id);
@@ -791,7 +803,7 @@ let WISH = [
 ];
 
 let filter = "All", cardFilter = "all", showAllBacks = false;
-const CAT_ORDER = ["Food","Gadgets","Clothing","Household","Transport","Cafe","Hobbies","Books","Subscriptions","Other"];
+const CAT_ORDER = ["Food","dis","Gadgets","Clothing","Household","Transport","Cafe","Hobbies","Books","Subscriptions","Other"];
 const txById = id => TX.find(t=>t.id===id);
 const received = t => BACKS.filter(b=>b.tx===t.id && b.status==="in").reduce((a,b)=>a+b.amt,0);
 const pending  = t => BACKS.filter(b=>b.tx===t.id && b.status==="wait").reduce((a,b)=>a+b.amt,0);
@@ -880,12 +892,15 @@ function render(){
   const byCat = {}; CAT_ORDER.forEach(c=>byCat[c]={s:0,p:0});
   TX.flatMap(linesOf).forEach(l=>byCat[l.cat].s+=l.net);
   WISH.filter(w=>w.on).forEach(w=>byCat[w.cat].p+=w.price);
-  const max = Math.max(1, ...CAT_ORDER.map(c=>byCat[c].s+byCat[c].p));
-  $("cats").innerHTML = CAT_ORDER.filter(c=>byCat[c].s+byCat[c].p>0)
-    .sort((a,b)=>(byCat[b].s+byCat[b].p)-(byCat[a].s+byCat[a].p))
-    .map(c=>{const v=byCat[c]; return `<button class="cat ${filter===c?"active":""}" data-cat="${c}" data-jump="1">
-      <span>${c}</span><span class="bar2"><i style="width:${v.s/max*100}%"></i><i class="p" style="width:${v.p/max*100}%"></i></span>
-      <span class="num">${yen(v.s)}${v.p?`<br><small>+${yen(v.p)}</small>`:""}</span></button>`}).join("");
+  // 予算（枠）と実績（塗り）を同じバーに重ねる。全カテゴリ共通の目盛り
+  const bud = c => +CAT_BUDGET[c] || 0;
+  const max = Math.max(1, ...CAT_ORDER.map(c=>Math.max(byCat[c].s+byCat[c].p, bud(c))));
+  const cpct = v => Math.min(100, Math.max(0, v/max*100));
+  $("cats").innerHTML = CAT_ORDER.filter(c=>byCat[c].s+byCat[c].p>0 || bud(c)>0)
+    .sort((a,b)=>Math.max(byCat[b].s+byCat[b].p, bud(b))-Math.max(byCat[a].s+byCat[a].p, bud(a)))
+    .map(c=>{const v=byCat[c], b=bud(c), over=b>0 && v.s+v.p>b; return `<button class="cat ${filter===c?"active":""} ${over?"over":""}" data-cat="${c}" data-jump="1">
+      <span>${c}</span><span class="bar2">${b?`<b class="bud" style="width:${cpct(b)}%"></b>`:""}<i style="width:${cpct(v.s)}%"></i><i class="p" style="left:${cpct(v.s)}%;width:${cpct(v.p)}%"></i></span>
+      <span class="num">${yen(v.s)}${b?`<br><small class="of">/ ${yen(b)}</small>`:""}${v.p?`<br><small>+${yen(v.p)}</small>`:""}</span></button>`}).join("");
 
   // 明細
   $("mOk").textContent = TX.filter(t=>t.st==="ok"&&t.src.includes("rcp")).length;
@@ -924,7 +939,7 @@ let DATA_AT = 0, lastSaved = "", pushTimer = null, SYNC_READY = false;
 const snapshot = () => {
   const fcards = Object.fromEntries(Object.entries(CARDS).filter(([k])=>k.startsWith("fc")));
   let inboxSeen = []; try { inboxSeen = JSON.parse(localStorage.getItem("mf-inbox-seen") || "[]"); } catch(e){}
-  return {v:1, budget:BUDGET, sample:SAMPLE, TX, BACKS, WISH, fcards, freeeSync:FREEE_SYNC, inboxSeen, visionKey: (()=>{ try { return localStorage.getItem("mf-vision-key") || ""; } catch(e){ return ""; } })()};
+  return {v:1, budget:BUDGET, catBudget:CAT_BUDGET, disDates:DIS_DATES, sample:SAMPLE, TX, BACKS, WISH, fcards, freeeSync:FREEE_SYNC, inboxSeen, visionKey: (()=>{ try { return localStorage.getItem("mf-vision-key") || ""; } catch(e){ return ""; } })()};
 };
 function save(){
   const body = JSON.stringify(snapshot());
@@ -935,7 +950,7 @@ function save(){
   if (SYNC_READY){ clearTimeout(pushTimer); pushTimer = setTimeout(pushData, 1200); }
 }
 function applyData(d){
-  BUDGET = d.budget || BUDGET; SAMPLE = !!d.sample;
+  BUDGET = d.budget || BUDGET; SAMPLE = !!d.sample; CAT_BUDGET = d.catBudget || {}; DIS_DATES = d.disDates || [];
   TX = d.TX || []; BACKS = d.BACKS || []; WISH = d.WISH || [];
   Object.assign(CARDS, d.fcards || {}); FREEE_SYNC = d.freeeSync || FREEE_SYNC || "";
   try {
@@ -967,7 +982,7 @@ function load(){
   try {
     const d = JSON.parse(localStorage.getItem(STORE) || "null");
     if (!d || d.v!==1) return;
-    BUDGET = d.budget || BUDGET; SAMPLE = !!d.sample;
+    BUDGET = d.budget || BUDGET; SAMPLE = !!d.sample; CAT_BUDGET = d.catBudget || {}; DIS_DATES = d.disDates || [];
     TX = d.TX || []; BACKS = d.BACKS || []; WISH = d.WISH || [];
     Object.assign(CARDS, d.fcards || {}); FREEE_SYNC = d.freeeSync || "";
     DATA_AT = +localStorage.getItem(STORE+"-at") || 0;
@@ -1550,6 +1565,7 @@ function openSettings(){
   $("menu").hidden = true; $("setSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true;
   document.body.style.overflow = "hidden";
   $("sBudget").value = BUDGET; $("sErr").textContent = ""; clearArmed = false;
+  $("sCatBud").innerHTML = CAT_ORDER.map(c=>`<label>${c}<input class="amt-in" type="number" inputmode="numeric" min="0" step="1000" data-cb="${c}" value="${CAT_BUDGET[c]||""}"></label>`).join("");
   $("sClear").textContent = "Remove sample data";
   $("sDataNote").textContent = SAMPLE ? "Sample data is shown. Removing it keeps the receipts and other entries you added yourself." : `Your data: ${TX.length} charges, ${BACKS.length} paybacks, ${WISH.length} wishlist items.`;
 }
@@ -1568,7 +1584,10 @@ $("setForm").addEventListener("submit", e=>{
   e.preventDefault();
   const v = Math.round(+$("sBudget").value || 0);
   if (v < 1000) return $("sErr").textContent = "Enter a budget of ¥1,000 or more";
-  BUDGET = v; closeAll(); render(); toast(`Budget set to ${yen(v)}`);
+  const cb = {}; document.querySelectorAll("[data-cb]").forEach(el=>{ const n = Math.round(+el.value||0); if (n>0) cb[el.dataset.cb] = n; });
+  BUDGET = v; CAT_BUDGET = cb; closeAll(); render();
+  const total = Object.values(cb).reduce((a,n)=>a+n,0);
+  toast(total ? `Budget ${yen(v)} · categories ${yen(total)}` : `Budget set to ${yen(v)}`);
 });
 $("sClear").addEventListener("click", ()=>{
   if (!clearArmed){ clearArmed = true; $("sClear").textContent = "Tap again to remove the samples"; return; }
@@ -1586,7 +1605,7 @@ $("sClear").addEventListener("click", ()=>{
 $("sBackup").addEventListener("click", async ()=>{
   let seen = []; try { seen = JSON.parse(localStorage.getItem("mf-inbox-seen") || "[]"); } catch(e){}
   const fcards = Object.fromEntries(Object.entries(CARDS).filter(([k])=>k.startsWith("fc")));
-  const text = JSON.stringify({v:1, kind:"myfinance-backup", at:new Date().toISOString(), budget:BUDGET, sample:SAMPLE, TX, BACKS, WISH, fcards, inboxSeen:seen});
+  const text = JSON.stringify({v:1, kind:"myfinance-backup", at:new Date().toISOString(), budget:BUDGET, catBudget:CAT_BUDGET, sample:SAMPLE, TX, BACKS, WISH, fcards, inboxSeen:seen});
   try { await navigator.clipboard.writeText(text); toast(`Backup copied (${TX.length} charges, ${WISH.length} wishes)`); }
   catch(e){ $("sRestoreTxt").value = text; $("sRestoreTxt").select(); toast("Copy the selected text to keep your backup"); }
 });
@@ -1597,7 +1616,7 @@ $("sRestore").addEventListener("click", ()=>{
   if (!d || d.kind!=="myfinance-backup" || !Array.isArray(d.TX)) return $("sRestoreErr").textContent = "That text is not a myfinance backup.";
   if (!restoreArmed){ restoreArmed = true; $("sRestore").textContent = "Tap again to replace this app's data"; return; }
   restoreArmed = false; $("sRestore").textContent = "Restore from backup";
-  BUDGET = d.budget || BUDGET; SAMPLE = !!d.sample; TX = d.TX; BACKS = d.BACKS || []; WISH = d.WISH || [];
+  BUDGET = d.budget || BUDGET; CAT_BUDGET = d.catBudget || CAT_BUDGET; SAMPLE = !!d.sample; TX = d.TX; BACKS = d.BACKS || []; WISH = d.WISH || [];
   Object.assign(CARDS, d.fcards || {});
   try { localStorage.setItem("mf-inbox-seen", JSON.stringify(d.inboxSeen || [])); } catch(e){}
   $("sRestoreTxt").value = ""; closeAll(); render(); toast(`Restored ${TX.length} charges and ${WISH.length} wishes`);
@@ -1674,6 +1693,23 @@ $("wishes").addEventListener("click", e=>{
 const appKey = () => { try { return localStorage.getItem("mf-app-key") || ""; } catch(e){ return ""; } };
 const cardShort = name => /アメリカン|AMEX|アメックス/i.test(name) ? "Amex" : /セゾン|SAISON/i.test(name) ? "Saison" : /三井住友|SMBC/i.test(name) ? "SMBC" : /楽天/.test(name) ? "Rakuten" : /JCB/i.test(name) ? "JCB" : name.slice(0,8);
 const freeeNote = () => $("sFreeeNote").textContent = !appKey() ? "Save the App key first, then tap Connect freee." : FREEE_SYNC ? `Last synced ${new Date(FREEE_SYNC).toLocaleString("en-US",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}.` : "Key saved. Tap Connect freee once, then charges sync when the app opens.";
+// dis: Google カレンダーの「dis」予定の日（当日か翌日）のカード明細から、飲食店らしい一番大きい支払いを dis にする
+const NOT_DINING = /ローソン|セブン|ファミリーマート|ファミマ|デイリーヤマザキ|ミニストップ|マルエツ|まいばすけっと|ライフ|オイシックス|成城石井|西友|イオン|クイックペイ|SUICA|LUUP|ＧＯアプリ|タクシー|タイムズ|CHARGESPOT|アマゾン|AMAZON|ガス|水道|電気|CLINIC|クリニック|ラクスル|APPLE|NETFLIX|ＮＥＴＦＬＩＸ|SPOTIFY|ANTHROPIC|お名前|コジマ|ビック|ヨドバシ|ベネフィット|スターバックス|パルコ|ＴＯＨＯ|口座振替/i;
+async function applyDis(){
+  try {
+    const r = await fetch("/api/cal/dis", {headers:{"X-App-Key": appKey()}, cache:"no-store"});
+    if (r.ok){ const j = await r.json(); if (Array.isArray(j.dates)) DIS_DATES = j.dates; }
+  } catch(e){}
+  const day = iso => Math.floor(Date.parse(iso+"T00:00:00Z")/86400000);
+  let n = 0;
+  for (const date of DIS_DATES){
+    const c = TX.filter(t=>t.iso && !t.splits && !t.disDone && t.amt>=2000 && !NOT_DINING.test(t.m+" "+(t.freee||"")) && [0,1].includes(day(t.iso)-day(date)))
+      .sort((a,b)=>(day(a.iso)-day(b.iso)) || (b.amt-a.amt))[0];
+    if (!c || c.cat==="dis") continue;
+    c.cat = "dis"; c.disDone = true; n++;
+  }
+  return n;
+}
 async function syncFreee(manual){
   if (!appKey()) { if (manual) toast("Save the App key in ••• settings first"); return; }
   const first = `${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,"0")}-01`;
@@ -1688,11 +1724,11 @@ async function syncFreee(manual){
   for (const t of d.txns.filter(x=>x.side==="expense" && x.amount>0)){
     const id = "f"+t.id, md = mdOf(t.date), card = "fc"+t.card;
     const have = TX.find(x=>x.id===id);
-    if (have){ Object.assign(have, {d:md, card, amt:t.amount}); continue; }
+    if (have){ Object.assign(have, {d:md, iso:t.date, card, amt:t.amount}); continue; }
     // レシートで先に登録した支出（現金以外）と同じ金額・前後3日なら、そのレシートを明細に重ねる
     const rc = TX.find(x=>x.id.startsWith("r") && x.card!=="cash" && x.amt===t.amount && Math.abs(mdNum(x.d)-mdNum(md))<=3);
-    if (rc){ Object.assign(rc, {id, d:md, card, freee:t.description}); merged++; continue; }
-    TX.push({id, d:md, card, m:t.description, amt:t.amount, src:["freee"], st:"miss", cat:guessCat(t.description, "Other")});
+    if (rc){ Object.assign(rc, {id, d:md, iso:t.date, card, freee:t.description}); merged++; continue; }
+    TX.push({id, d:md, iso:t.date, card, m:t.description, amt:t.amount, src:["freee"], st:"miss", cat:guessCat(t.description, "Other")});
     added++;
   }
   // カード明細の「アマゾン」を、同じ金額で2週間以内に先に注文した Amazon の注文と結び、品名とカテゴリを付ける
@@ -1711,8 +1747,10 @@ async function syncFreee(manual){
     Object.assign(t, {amzOrder:o.id, m:"Amazon", splits:[[title, cat, t.amt]], src:["freee","amz"], st:"fill"}); delete t.cat;
     enriched++;
   }
+  const dis = await applyDis();
   TX.sort((a,b)=>mdNum(b.d)-mdNum(a.d));
   FREEE_SYNC = d.fetched_at; render(); freeeNote();
+  if (dis) toast(`dis: ${dis} charge${dis===1?"":"s"} matched to your calendar`);
   if (manual || added || merged || enriched) toast(`freee: ${added} new charge${added===1?"":"s"}${merged?`, ${merged} matched to receipts`:""}${enriched?`, ${enriched} Amazon itemized`:""}`);
 }
 $("openSettings").addEventListener("click", ()=>{ $("sFreeeKey").value = ""; freeeNote(); });
