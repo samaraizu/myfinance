@@ -248,6 +248,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .catbud{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .catbud label{display:grid;gap:2px;font-size:12px;color:var(--muted)}
 .sheet-x{position:sticky;top:0;float:right;z-index:2;width:36px;height:36px;margin:-4px -6px 0 0;border:0;border-radius:50%;background:var(--bg);color:var(--ink);font-size:24px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.tag-sel{appearance:none;-webkit-appearance:none;font:inherit;font-size:11px;font-weight:700;color:var(--ink);background:var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23888'/%3E%3C/svg%3E") no-repeat right 6px center;border:1px solid var(--line);border-radius:999px;padding:2px 18px 2px 8px;cursor:pointer;max-width:9em}
 /* 明細 */
 .match{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .match span{font-size:11px;border-radius:0;padding:2px 10px;background:var(--bg);color:var(--muted)}
@@ -917,13 +918,14 @@ function render(){
     && (filter==="All" || (t.splits ? t.splits.some(s=>s[1]===filter) : t.cat===filter)));
   const stLabel = {ok:["ok","Matched"], fill:["fill","Itemized"], miss:["miss","Needs receipt"]};
   const srcLabel = {amz:["amz","Amazon"], rcp:["rcp","Receipt"], amx:["amx","Amex sheet"], freee:["","freee"]};
+const catSel = (attr, cur) => `<select class="tag-sel" ${attr} aria-label="Change category">${CAT_ORDER.map(c=>`<option ${c===cur?"selected":""}>${c}</option>`).join("")}</select>`;
   $("tx").innerHTML = rows.length ? rows.map(t=>{
     const st = (t.st==="miss" && /AMAZON/.test(t.m)) ? ["miss","Needs order"] : stLabel[t.st], r = received(t);
     const tags = `<span class="tag card">${short(t.card)}</span>`
       + t.src.map(s=>`<span class="tag ${srcLabel[s][0]}">${srcLabel[s][1]}</span>`).join("")
-      + (t.cat?`<span class="tag">${t.cat}</span>`:"") + (t.note?`<span class="tag">${t.note}</span>`:"")
+      + (t.splits?"":catSel(`data-txcat="${t.id}"`, t.cat||"Other")) + (t.note?`<span class="tag">${t.note}</span>`:"")
       + `<span class="st ${st[0]}">${st[1]}</span>`;
-    const splits = t.splits ? `<div class="splits">${t.splits.map(s=>`<div><span>${esc(s[0])} · <em>${s[1]}</em></span><span class="num">${yen(s[2])}</span></div>`).join("")}</div>` : "";
+    const splits = t.splits ? `<div class="splits">${t.splits.map((s,k)=>`<div><span>${esc(s[0])} · ${catSel(`data-txcat="${t.id}" data-k="${k}"`, s[1])}</span><span class="num">${yen(s[2])}</span></div>`).join("")}</div>` : "";
     const bk = BACKS.filter(b=>b.tx===t.id);
     const backs = bk.length ? `<div class="splits back">${bk.map(b=>`<div><span>Split · ${esc(b.who)} (${b.method==="cash"?"Cash":"PayPay"})</span><span class="num ${b.status==="in"?"in":"wait"}">${b.status==="in"?"−"+yen(b.amt):"Pending "+yen(b.amt)}</span></div>`).join("")}</div>` : "";
     const amt = r ? `<s>${yen(t.amt)}</s>${yen(t.amt-r)}` : yen(t.amt);
@@ -1022,6 +1024,13 @@ function updatePreview(){
     : `${esc(t.m)} net <b class="num">${yen(t.amt-received(t))}</b> → <b class="num">${yen(t.amt-received(t)-a)}</b>`;
 }
 $("wsClose") && $("wsClose").addEventListener("click", ()=>closeAll());
+$("tx").addEventListener("change", e=>{
+  const id = e.target.dataset.txcat; if (!id) return;
+  const t = TX.find(x=>x.id===id); if (!t) return;
+  if (e.target.dataset.k!==undefined && t.splits) t.splits[+e.target.dataset.k][1] = e.target.value;
+  else t.cat = e.target.value;
+  t.catManual = true; t.disDone = true; render(); toast(`Category set to ${e.target.value}`);
+});
 function closeAll(){
   ["sheet","amexSheet","amzSheet","ppSheet","rcptSheet","setSheet","wishSheet","scrim","menu"].forEach(id=>$(id).hidden=true);
   $("openForm").hidden=false; $("openForm").setAttribute("aria-expanded","false");
@@ -1798,6 +1807,9 @@ const runInbox = (async()=>{
       if (!act.id || seen.includes(act.id)) continue;
       seen.push(act.id);
       if (act.type==="remove-sample-wish"){ const before = WISH.length; WISH = WISH.filter(w=>!SAMPLE_IDS.has(w.id)); n += before - WISH.length; }
+      if (act.type==="set-cat-budget" && act.budgets && typeof act.budgets==="object"){
+        CAT_BUDGET = Object.fromEntries(Object.entries(act.budgets).filter(([c,v])=>CAT_ORDER.includes(c) && +v>0).map(([c,v])=>[c, Math.round(+v)])); n++;
+      }
       if (act.type==="update-wish"){
         const w = WISH.find(x=>x.name===act.match);
         if (w && act.name && WISH.some(x=>x!==w && x.name===act.name && x.price===w.price)) { WISH = WISH.filter(x=>x!==w); n++; }  // 同じ品がもうあれば重複を消す
