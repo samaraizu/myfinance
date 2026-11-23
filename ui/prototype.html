@@ -1,7 +1,7 @@
 <title>myfinance Wallet</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&family=Work+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&family=Roboto+Mono:wght@400;500;600&family=Manrope:wght@400;500;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
 <style>
 /* Layout: phone-only single column. Left to spend → paybacks → wishlist → categories → charges. ＋ button opens a bottom sheet to log a payback */
 /* Color: 2色だけ。墨（--ink）とみどり（--accent）。灰色・薄い面はすべてこの2色を紙色に混ぜて作る */
@@ -48,7 +48,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .empty-note{font-size:13px;color:var(--muted);padding:8px 0}
 /* Night skin：濃紺のカード＋シアン＋ライムの金額、角丸、ヒーロー帯 */
 .night-hero{display:none}
-.skin-night{--money:#d4f04a; color-scheme:dark}
+.skin-night{--money:var(--ink)}
 .skin-night body{background:var(--bg)}
 .skin-night .night-hero{display:grid;gap:14px;justify-items:center;text-align:center;margin:0 -16px;padding:28px 16px 0;
   background:
@@ -79,6 +79,17 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .skin-night .toast{border-radius:999px}
 .skin-night .bar{height:0;padding:0;overflow:hidden;background:var(--paper);margin:0 -16px;padding-inline:16px}
 .skin-night .bar.stuck{height:auto;padding-block:12px 8px;overflow:visible}
+/* モノトーン・タブ・見出し・数字の統一 */
+.styles,.sync{display:none!important}
+.tabs{display:grid;grid-template-columns:1fr 1fr;width:100%;border-bottom:1px solid var(--line)}
+.tabs button{font:inherit;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:none;border:0;border-bottom:2px solid transparent;min-height:48px;cursor:pointer}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+.card h2{font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+.card h2 span{text-transform:none;letter-spacing:0;font-weight:500;color:var(--muted)}
+.num,.num b,.num small{font-size:16px!important;line-height:1.4!important;font-weight:600}
+.free.num{font-size:16px!important}
+.legend .num,.back-sum .num,.match b{font-size:16px!important}
+.scale.num,.scale.num span{font-size:12px!important;font-weight:500;color:var(--muted)}
 /* スタイル切り替え（試作用） */
 .styles{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
 .styles::-webkit-scrollbar{display:none}
@@ -334,14 +345,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   <div class="night-hero" id="nightHero">
     <h2 data-month>November</h2>
     <p>Budget <span data-budget>¥100,000</span> · <span data-daysleft>11</span> days left</p>
-    <button class="pillbtn" type="button" id="nightAdd">＋ Add</button>
-    <nav aria-label="Sections">
-      <button type="button" aria-current="true" data-goto="Budget">Overview</button>
-      <button type="button" data-goto="Paybacks">Paybacks</button>
-      <button type="button" data-goto="Wishlist">Wishlist</button>
-      <button type="button" data-goto="Charges">Charges</button>
-      <button type="button" class="dots" id="openSettings" aria-label="Budget and data settings">•••</button>
-    </nav>
+    <button class="pillbtn" type="button" id="nightAdd" hidden>＋ Add</button>
+    <div class="tabs" role="tablist" aria-label="Views">
+      <button type="button" role="tab" id="tabSummary" aria-selected="true" data-tab="summary">Summary</button>
+      <button type="button" role="tab" id="tabDetails" aria-selected="false" data-tab="details">Details</button>
+    </div>
   </div>
 
   <div class="styles" id="styles" aria-label="Font and color style"></div>
@@ -354,13 +362,19 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <span class="src">Receipts <b id="rcptCount">14</b></span>
   </div>
 
-  <section class="card" aria-label="Budget">
+  <section class="card" aria-label="Budget" data-tab="summary">
+    <h2>Summary</h2>
     <div class="free-label">Left to spend, wishlist included (budget <span data-budget>¥100,000</span>)</div>
     <div class="free num" id="free">¥0</div>
     <div class="hero-sub">
       <span class="pill ok" id="pacePill"></span>
-      <span class="perday">Per day <b id="perDay"></b></span>
+      <span class="perday">Per day <b class="num" id="perDay"></b></span>
     </div>
+    <div class="netline" id="netline"></div>
+  </section>
+
+  <section class="card" aria-label="Spending rate" data-tab="summary">
+    <h2>Spending rate <span class="num" id="rateTxt"></span></h2>
     <div class="meter">
       <div class="seg spent" id="segSpent"></div>
       <div class="seg plan" id="segPlan"></div>
@@ -373,10 +387,9 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
       <div class="l-plan"><small>Planned</small><span class="num" id="lgPlan"></span></div>
       <div class="l-free"><small>vs. pace</small><span class="num" id="lgPace"></span></div>
     </div>
-    <div class="netline" id="netline"></div>
   </section>
 
-  <section class="card" aria-label="Paybacks">
+  <section class="card" aria-label="Paybacks" data-tab="details" hidden>
     <h2>Paybacks <span id="bSplit"></span></h2>
     <div class="back-sum">
       <div class="in"><small>Received</small><span class="num" id="bIn"></span></div>
@@ -386,7 +399,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <button class="more" type="button" id="moreBacks" hidden></button>
   </section>
 
-  <section class="card" aria-label="Wishlist">
+  <section class="card" aria-label="Wishlist" data-tab="summary">
     <h2>Wishlist <span>Check = buying this month</span></h2>
     <div class="wishes" id="wishes"></div>
     <button class="more" type="button" id="wishAddOpen">＋ Add an item</button>
@@ -403,12 +416,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <div class="wish-foot"><span>Planned this month <b class="num" id="wishTotal"></b></span><span id="wishHint"></span></div>
   </section>
 
-  <section class="card" aria-label="By category">
+  <section class="card" aria-label="By category" data-tab="details" hidden>
     <h2>By category <span>Tap to filter</span></h2>
     <div class="cats" id="cats"></div>
   </section>
 
-  <section class="card" aria-label="Charges" id="txCard">
+  <section class="card" aria-label="Charges" id="txCard" data-tab="details" hidden>
     <h2>Card charges <span>freee · Amex · Amazon · receipts</span></h2>
     <div class="match">
       <span>Receipt match <b id="mOk"></b></span>
@@ -419,6 +432,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <div class="chips" id="filters"></div>
     <ul class="tx" id="tx"></ul>
     <div class="tx-foot"><span id="txCount"></span><span class="num" id="txSum"></span></div>
+  </section>
+
+  <section class="card" aria-label="Settings" data-tab="details" hidden>
+    <h2>Settings</h2>
+    <button class="btn ghost" type="button" id="openSettings">Budget, keys and data</button>
   </section>
 </div>
 
@@ -741,6 +759,7 @@ function render(){
   Object.assign($("segOver").style, {left: (100-over/BUDGET*100)+"%", width: (over/BUDGET*100)+"%"});
   $("pace").style.left = (ideal/BUDGET*100)+"%";
   $("lgSpent").textContent = yen(spent);
+  $("rateTxt").textContent = `${Math.round(spent/BUDGET*100)}% used · day ${DAY} of ${DAYS}`;
   $("lgPlan").textContent = yen(plan);
   $("lgPace").textContent = (diff>=0?"+":"−") + yen(Math.abs(diff));
   $("netline").innerHTML = `Card <span class="num">${yen(cardTotal)}</span> − paybacks <b class="num">${yen(backIn)}</b>`
@@ -1362,38 +1381,31 @@ document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeAll(); });
 addEventListener("scroll", ()=>$("bar").classList.toggle("stuck", scrollY > 140), {passive:true});
 // フォント×カラーの組み合わせ（各2色）。#style-<id> で直接開ける
 const STYLES = {
-  night:    {name:"Night",     font:"Manrope / Space Grotesk", sans:'"Manrope"', num:'"Space Grotesk"', skin:"night",
-             light:["#e8ecf4","#3fe0d0","#1b2131"], dark:["#e8ecf4","#3fe0d0","#1b2131"], bg:"#121620", money:"#d4f04a"},
-  ledger:   {name:"Ledger",    font:"Plex Sans / Plex Mono",   sans:'"IBM Plex Sans"', num:'"IBM Plex Mono"',
-             light:["#121a16","#0e6b57","#ffffff"], dark:["#e6ede9","#52c3a3","#0e1411"]},
-  cobalt:   {name:"Cobalt",    font:"Space Grotesk / JetBrains Mono", sans:'"Space Grotesk"', num:'"JetBrains Mono"',
-             light:["#141826","#2f45c8","#ffffff"], dark:["#e7e9f2","#8d9cff","#0f121c"]},
-  persimmon:{name:"Persimmon", font:"DM Sans / DM Mono",       sans:'"DM Sans"', num:'"DM Mono"',
-             light:["#1e1916","#b23c0a","#ffffff"], dark:["#f1ebe7","#f0915e","#171210"]},
-  receipt:  {name:"Receipt",   font:"Work Sans / Space Mono",  sans:'"Work Sans"', num:'"Space Mono"',
-             light:["#1a1a1a","#7a5c00","#fbfbf8"], dark:["#ececea","#e0b84a","#141414"]},
-  shu:      {name:"Shu",       font:"Zen Kaku Gothic / Roboto Mono", sans:'"Zen Kaku Gothic New"', num:'"Roboto Mono"',
-             light:["#1c1c1f","#c0182c","#ffffff"], dark:["#ececef","#ff7282","#141417"]},
+  mono: {name:"Mono", sans:'"Manrope"', num:'"Manrope"', skin:"night",
+         light:["#141414","#141414","#ffffff"], dark:["#f2f2f2","#f2f2f2","#1c1c1c"], bgLight:"#efefef", bgDark:"#101010"},
 };
-let styleId = "night";
-try { styleId = localStorage.getItem("mf-style") || styleId; } catch(e){}
-const fromHash = location.hash.replace("#style-","");
-if (STYLES[fromHash]) styleId = fromHash;
+const styleId = "mono";
 const isDark = () => { const t = document.documentElement.dataset.theme; return t ? t==="dark" : matchMedia("(prefers-color-scheme: dark)").matches; };
 function applyStyle(){
   const st = STYLES[styleId], [ink, accent, paper] = st[isDark() ? "dark" : "light"], r = document.documentElement.style;
   r.setProperty("--ink", ink); r.setProperty("--accent", accent); r.setProperty("--paper", paper);
   r.setProperty("--font-jp", `${st.sans}, "Zen Kaku Gothic New", system-ui, -apple-system, "Hiragino Sans", sans-serif`);
-  r.setProperty("--font-num", `${st.num}, ui-monospace, SFMono-Regular, Menlo, monospace`);
+  r.setProperty("--font-num", `${st.num}, system-ui, sans-serif`);
   document.documentElement.classList.toggle("skin-night", st.skin==="night");
-  if (st.bg) r.setProperty("--bg", st.bg); else r.removeProperty("--bg");
-  r.colorScheme = st.skin==="night" ? "dark" : "";
-  $("styles").innerHTML = Object.entries(STYLES).map(([id,x])=>{ const c = x[isDark()?"dark":"light"];
-    return `<button class="sty" type="button" data-style="${id}" aria-pressed="${id===styleId}">
-      <span class="sw"><i style="background:${x.skin?c[2]:c[0]}"></i><i style="background:${c[1]}"></i>${x.money?`<i style="background:${x.money}"></i>`:""}</span>
-      <b style="font-family:${x.sans.replace(/"/g,"'")},sans-serif">${x.name}</b><small>${x.font}</small></button>`; }).join("");
+  r.setProperty("--bg", isDark() ? st.bgDark : st.bgLight);
+  r.setProperty("--money", ink);
+  r.colorScheme = isDark() ? "dark" : "light";
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", isDark() ? st.bgDark : st.bgLight);
 }
 $("nightAdd").addEventListener("click", ()=>toggleMenu(true));
+// Summary / Details タブ
+function showTab(tab){
+  document.querySelectorAll("section.card[data-tab]").forEach(sec=>sec.hidden = sec.dataset.tab !== tab);
+  document.querySelectorAll(".tabs [data-tab]").forEach(b=>b.setAttribute("aria-selected", String(b.dataset.tab===tab)));
+  try { localStorage.setItem("mf-tab", tab); } catch(e){}
+}
+document.querySelector(".tabs").addEventListener("click", e=>{ const b = e.target.closest("[data-tab]"); if (b) showTab(b.dataset.tab); });
+try { const t = localStorage.getItem("mf-tab"); if (t==="details") showTab("details"); } catch(e){}
 $("nightHero").addEventListener("click", e=>{
   const b = e.target.closest("[data-goto]"); if (!b) return;
   $("nightHero").querySelectorAll("[data-goto]").forEach(x=>x.setAttribute("aria-current", String(x===b)));
