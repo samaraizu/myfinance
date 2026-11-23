@@ -588,6 +588,13 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <button class="btn ghost" type="button" id="sClear">Remove sample data</button>
     <button class="btn ghost" type="button" id="sSample">Load sample data</button>
   </div>
+  <div style="display:grid;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
+    <p class="lead" style="margin:0">Backup: copy your data here, then paste it into the app on another icon or phone. Keys are not included.</p>
+    <button class="btn" type="button" id="sBackup">Copy backup</button>
+    <label class="field">Paste a backup<textarea id="sRestoreTxt" rows="3" placeholder='{"v":1,...}'></textarea></label>
+    <button class="btn ghost" type="button" id="sRestore">Restore from backup</button>
+    <div class="err" id="sRestoreErr" role="alert"></div>
+  </div>
 </div>
 
 <div class="sheet" id="ppSheet" role="dialog" aria-modal="true" aria-labelledby="ppTitle" hidden>
@@ -1534,6 +1541,26 @@ $("sClear").addEventListener("click", ()=>{
   closeAll(); render();
   const n = TX.length + BACKS.length + WISH.length;
   toast(n ? `Samples removed. Kept your ${n} entr${n>1?"ies":"y"}.` : "Samples removed. Add your first receipt with ＋");
+});
+// バックアップ: データ（キー以外）を文字にしてコピー / 貼り付けて復元
+$("sBackup").addEventListener("click", async ()=>{
+  let seen = []; try { seen = JSON.parse(localStorage.getItem("mf-inbox-seen") || "[]"); } catch(e){}
+  const fcards = Object.fromEntries(Object.entries(CARDS).filter(([k])=>k.startsWith("fc")));
+  const text = JSON.stringify({v:1, kind:"myfinance-backup", at:new Date().toISOString(), budget:BUDGET, sample:SAMPLE, TX, BACKS, WISH, fcards, inboxSeen:seen});
+  try { await navigator.clipboard.writeText(text); toast(`Backup copied (${TX.length} charges, ${WISH.length} wishes)`); }
+  catch(e){ $("sRestoreTxt").value = text; $("sRestoreTxt").select(); toast("Copy the selected text to keep your backup"); }
+});
+let restoreArmed = false;
+$("sRestore").addEventListener("click", ()=>{
+  $("sRestoreErr").textContent = "";
+  let d; try { d = JSON.parse($("sRestoreTxt").value.trim()); } catch(e){ return $("sRestoreErr").textContent = "That text is not a myfinance backup. Paste the whole copied text."; }
+  if (!d || d.kind!=="myfinance-backup" || !Array.isArray(d.TX)) return $("sRestoreErr").textContent = "That text is not a myfinance backup.";
+  if (!restoreArmed){ restoreArmed = true; $("sRestore").textContent = "Tap again to replace this app's data"; return; }
+  restoreArmed = false; $("sRestore").textContent = "Restore from backup";
+  BUDGET = d.budget || BUDGET; SAMPLE = !!d.sample; TX = d.TX; BACKS = d.BACKS || []; WISH = d.WISH || [];
+  Object.assign(CARDS, d.fcards || {});
+  try { localStorage.setItem("mf-inbox-seen", JSON.stringify(d.inboxSeen || [])); } catch(e){}
+  $("sRestoreTxt").value = ""; closeAll(); render(); toast(`Restored ${TX.length} charges and ${WISH.length} wishes`);
 });
 $("sSample").addEventListener("click", ()=>{
   const d = JSON.parse(SAMPLE_COPY);
