@@ -249,6 +249,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .catbud label{display:grid;gap:2px;font-size:12px;color:var(--muted)}
 .sheet-x{position:sticky;top:0;float:right;z-index:2;width:36px;height:36px;margin:-4px -6px 0 0;border:0;border-radius:50%;background:var(--bg);color:var(--ink);font-size:24px;line-height:1;cursor:pointer;display:grid;place-items:center}
 .tag-sel{appearance:none;-webkit-appearance:none;font:inherit;font-size:11px;font-weight:700;color:var(--ink);background:var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23888'/%3E%3C/svg%3E") no-repeat right 6px center;border:1px solid var(--line);border-radius:999px;padding:2px 18px 2px 8px;cursor:pointer;max-width:9em}
+.subs{list-style:none;margin:0;padding:0;display:grid}
+.subs li{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.subs li:last-child{border-bottom:0}
+.subs small{color:var(--muted);font-size:11px;margin-left:4px}
+.subs-foot{font-size:12px;color:var(--muted);margin:10px 0 0}
 /* 明細 */
 .match{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .match span{font-size:11px;border-radius:0;padding:2px 10px;background:var(--bg);color:var(--muted)}
@@ -480,6 +485,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   <section class="card" aria-label="By category" data-tab="summary">
     <h2>By category <span>Tap to filter</span></h2>
     <div class="cats" id="cats"></div>
+  </section>
+
+  <section class="card" aria-label="Subscriptions" data-tab="summary">
+    <h2>Subscriptions <span>Monthly <b class="num" id="subTotal"></b></span></h2>
+    <ul class="subs" id="subs"></ul>
+    <p class="subs-foot">Charged on cards this month <b class="num" id="subCharged"></b> · not counted in the budget</p>
   </section>
 
 
@@ -731,7 +742,7 @@ const TODAY = new Date();
 const DAY = TODAY.getDate(), DAYS = new Date(TODAY.getFullYear(), TODAY.getMonth()+1, 0).getDate();
 const TODAY_MD = `${TODAY.getMonth()+1}/${DAY}`;
 const TODAY_ISO = `${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,"0")}-${String(DAY).padStart(2,"0")}`;
-let BUDGET = 100000, CAT_BUDGET = {}, DIS_DATES = [], SAMPLE = true, FREEE_SYNC = "", COUNT_TOKEN = 0;
+let BUDGET = 100000, CAT_BUDGET = {}, SUBS = [], DIS_DATES = [], SAMPLE = true, FREEE_SYNC = "", COUNT_TOKEN = 0;
 const esc = v => String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const yen = n => (n < 0 ? "-¥" : "¥") + Math.abs(Math.round(n)).toLocaleString("en-US");
 const $ = id => document.getElementById(id);
@@ -806,7 +817,7 @@ let WISH = [
 ];
 
 let filter = "All", cardFilter = "all", showAllBacks = false;
-const CAT_ORDER = ["Food","dis","Gadgets","Clothing","Household","Transport","Cafe","Hobbies","Books","Subscriptions","Other"];
+const CAT_ORDER = ["Food","dis","Friends","Gadgets","Clothing","Household","Transport","Cafe","Hobbies","Books","Subscriptions","Other"];
 const txById = id => TX.find(t=>t.id===id);
 const received = t => BACKS.filter(b=>b.tx===t.id && b.status==="in").reduce((a,b)=>a+b.amt,0);
 const pending  = t => BACKS.filter(b=>b.tx===t.id && b.status==="wait").reduce((a,b)=>a+b.amt,0);
@@ -817,8 +828,10 @@ const short = c => c==="cash" ? "Cash" : !CARDS[c] ? "Card" : c.startsWith("fc")
 const cardChoices = () => Object.entries(CARDS).filter(([k])=>k==="cash" || k.startsWith("fc") || SAMPLE);
 const cardOptions = sel => cardChoices().map(([k,c])=>`<option value="${k}" ${k===sel?"selected":""}>${k==="cash"?"Cash":k.startsWith("fc")?c.label:c.name+" "+c.label}</option>`).join("");
 
+// Subscriptions は月の予算から外して、別の欄で見る
+const subAmt = t => t.splits ? t.splits.filter(x=>x[1]==="Subscriptions").reduce((a,x)=>a+x[2],0) : (t.cat==="Subscriptions" ? t.amt : 0);
 function render(){
-  const cardTotal = TX.reduce((a,t)=>a+t.amt,0);
+  const cardTotal = TX.reduce((a,t)=>a+t.amt-subAmt(t),0);
   const backIn = BACKS.filter(b=>b.status==="in").reduce((a,b)=>a+b.amt,0);
   const backWait = BACKS.filter(b=>b.status==="wait").reduce((a,b)=>a+b.amt,0);
   const spent = cardTotal - backIn;
@@ -893,25 +906,33 @@ function render(){
 
   // カテゴリ（実質）
   const byCat = {}; CAT_ORDER.forEach(c=>byCat[c]={s:0,p:0});
-  TX.flatMap(linesOf).forEach(l=>byCat[l.cat].s+=l.net);
-  WISH.filter(w=>w.on).forEach(w=>byCat[w.cat].p+=w.price);
+  TX.flatMap(linesOf).forEach(l=>{ if (byCat[l.cat]) byCat[l.cat].s+=l.net; });
+  WISH.filter(w=>w.on).forEach(w=>{ if (byCat[w.cat]) byCat[w.cat].p+=w.price; });
   // 予算（枠）と実績（塗り）を同じバーに重ねる。全カテゴリ共通の目盛り
   const bud = c => +CAT_BUDGET[c] || 0;
-  const max = Math.max(1, ...CAT_ORDER.map(c=>Math.max(byCat[c].s+byCat[c].p, bud(c))));
+  delete byCat.Subscriptions;
+  const CATS = CAT_ORDER.filter(c=>c!=="Subscriptions");
+  const max = Math.max(1, ...CATS.map(c=>Math.max(byCat[c].s+byCat[c].p, bud(c))));
   const cpct = v => Math.min(100, Math.max(0, v/max*100));
-  $("cats").innerHTML = CAT_ORDER.filter(c=>byCat[c].s+byCat[c].p>0 || bud(c)>0)
+  $("cats").innerHTML = CATS.filter(c=>byCat[c].s+byCat[c].p>0 || bud(c)>0)
     .sort((a,b)=>Math.max(byCat[b].s+byCat[b].p, bud(b))-Math.max(byCat[a].s+byCat[a].p, bud(a)))
     .map(c=>{const v=byCat[c], b=bud(c), over=b>0 && v.s+v.p>b; return `<button class="cat ${filter===c?"active":""} ${over?"over":""}" data-cat="${c}" data-jump="1">
       <span>${c}</span><span class="bar2">${b?`<b class="bud" style="width:${cpct(b)}%"></b>`:""}<i style="width:${cpct(v.s)}%"></i><i class="p" style="left:${cpct(v.s)}%;width:${cpct(v.p)}%"></i></span>
       <span class="num">${yen(v.s)}${b?`<br><small class="of">/ ${yen(b)}</small>`:""}${v.p?`<br><small>+${yen(v.p)}</small>`:""}</span></button>`}).join("");
 
+  // Subscriptions（Notion の Work から）
+  const subCharged = TX.reduce((a,t)=>a+subAmt(t),0);
+  const subPlan = SUBS.reduce((a,x)=>a+(+x.amt||0),0);
+  $("subs").innerHTML = SUBS.length ? SUBS.map(x=>`<li><span>${esc(x.name)}${x.kind?` <small>${esc(x.kind)}</small>`:""}</span><span class="num">${x.amt?yen(x.amt):"—"}</span></li>`).join("") : `<li class="empty-note">No subscriptions yet.</li>`;
+  $("subTotal").textContent = yen(subPlan);
+  $("subCharged").textContent = yen(subCharged);
   // 明細
   $("mOk").textContent = TX.filter(t=>t.st==="ok"&&t.src.includes("rcp")).length;
   $("mSplit").textContent = TX.filter(t=>t.st==="fill").length;
   $("mMiss").textContent = TX.filter(t=>t.st==="miss").length;
   $("cardFilters").innerHTML = [["all","All cards"], ...[...new Set(TX.map(t=>t.card))].filter(k=>CARDS[k]).map(k=>[k, short(k)])]
     .map(([k,l])=>`<button class="chip" aria-pressed="${cardFilter===k}" data-card="${k}">${l}</button>`).join("");
-  $("filters").innerHTML = ["All", ...CAT_ORDER.filter(c=>byCat[c].s>0 || c===filter)]
+  $("filters").innerHTML = ["All", ...CAT_ORDER.filter(c=>(byCat[c]?byCat[c].s>0:TX.some(t=>subAmt(t)>0)) || c===filter)]
     .map(c=>`<option value="${c}" ${filter===c?"selected":""}>${c==="All"?"All categories":c}</option>`).join("");
 
   const rows = TX.filter(t => (cardFilter==="all" || t.card===cardFilter)
@@ -943,7 +964,7 @@ let DATA_AT = 0, lastSaved = "", pushTimer = null, SYNC_READY = false;
 const snapshot = () => {
   const fcards = Object.fromEntries(Object.entries(CARDS).filter(([k])=>k.startsWith("fc")));
   let inboxSeen = []; try { inboxSeen = JSON.parse(localStorage.getItem("mf-inbox-seen") || "[]"); } catch(e){}
-  return {v:1, budget:BUDGET, catBudget:CAT_BUDGET, disDates:DIS_DATES, sample:SAMPLE, TX, BACKS, WISH, fcards, freeeSync:FREEE_SYNC, inboxSeen, visionKey: (()=>{ try { return localStorage.getItem("mf-vision-key") || ""; } catch(e){ return ""; } })()};
+  return {v:1, budget:BUDGET, catBudget:CAT_BUDGET, subs:SUBS, disDates:DIS_DATES, sample:SAMPLE, TX, BACKS, WISH, fcards, freeeSync:FREEE_SYNC, inboxSeen, visionKey: (()=>{ try { return localStorage.getItem("mf-vision-key") || ""; } catch(e){ return ""; } })()};
 };
 function save(){
   const body = JSON.stringify(snapshot());
@@ -954,7 +975,7 @@ function save(){
   if (SYNC_READY){ clearTimeout(pushTimer); pushTimer = setTimeout(pushData, 1200); }
 }
 function applyData(d){
-  BUDGET = d.budget || BUDGET; SAMPLE = !!d.sample; CAT_BUDGET = d.catBudget || {}; DIS_DATES = d.disDates || [];
+  BUDGET = d.budget || BUDGET; SAMPLE = !!d.sample; CAT_BUDGET = d.catBudget || {}; SUBS = d.subs || []; DIS_DATES = d.disDates || [];
   TX = d.TX || []; BACKS = d.BACKS || []; WISH = d.WISH || [];
   Object.assign(CARDS, d.fcards || {}); FREEE_SYNC = d.freeeSync || FREEE_SYNC || "";
   try {
@@ -986,7 +1007,7 @@ function load(){
   try {
     const d = JSON.parse(localStorage.getItem(STORE) || "null");
     if (!d || d.v!==1) return;
-    BUDGET = d.budget || BUDGET; SAMPLE = !!d.sample; CAT_BUDGET = d.catBudget || {}; DIS_DATES = d.disDates || [];
+    BUDGET = d.budget || BUDGET; SAMPLE = !!d.sample; CAT_BUDGET = d.catBudget || {}; SUBS = d.subs || []; DIS_DATES = d.disDates || [];
     TX = d.TX || []; BACKS = d.BACKS || []; WISH = d.WISH || [];
     Object.assign(CARDS, d.fcards || {}); FREEE_SYNC = d.freeeSync || "";
     DATA_AT = +localStorage.getItem(STORE+"-at") || 0;
@@ -1722,6 +1743,18 @@ async function applyDis(){
   }
   return n;
 }
+// Notion の予算（生活への投資）と Subscriptions（Work）。Claude が Cloudflare に置いた内容を読む
+async function pullPlan(){
+  if (!appKey()) return;
+  try {
+    const r = await fetch("/api/plan", {headers:{"X-App-Key": appKey()}, cache:"no-store"}); if (!r.ok) return;
+    const j = await r.json();
+    if (j.catBudget) CAT_BUDGET = Object.fromEntries(Object.entries(j.catBudget).filter(([c,v])=>CAT_ORDER.includes(c) && +v>0));
+    if (Array.isArray(j.subs)) SUBS = j.subs;
+    if (+j.budget >= 1000) BUDGET = +j.budget;
+    render();
+  } catch(e){}
+}
 async function syncFreee(manual){
   if (!appKey()) { if (manual) toast("Save the App key in ••• settings first"); return; }
   const first = `${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,"0")}-01`;
@@ -1853,7 +1886,7 @@ function playIntro(){
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const root = document.documentElement;
   root.classList.remove("intro"); void root.offsetWidth; root.classList.add("intro");
-  const spent = TX.reduce((a,t)=>a+t.amt,0) - BACKS.filter(b=>b.status==="in").reduce((a,b)=>a+b.amt,0);
+  const spent = TX.reduce((a,t)=>a+t.amt-subAmt(t),0) - BACKS.filter(b=>b.status==="in").reduce((a,b)=>a+b.amt,0);
   countUp($("heroSpent"), spent, 1100); countUp($("heroLeft"), BUDGET - spent, 1100);
   clearTimeout(playIntro.t); playIntro.t = setTimeout(()=>root.classList.remove("intro"), 2600);
 }
@@ -1865,11 +1898,11 @@ document.addEventListener("visibilitychange", ()=>{
 });
 // 起動の順番: クラウドのデータを取ってから、受け取り箱と freee の明細を重ねる
 (async()=>{
-  await pullData();
+  await pullData(); await pullPlan();
   await runInbox();
   if (new URLSearchParams(location.search).get("freee")==="connected"){ history.replaceState(null, "", "/"); toast("freee connected"); syncFreee(true); }
   else if (!FREEE_SYNC || Date.now() - new Date(FREEE_SYNC) > 10*60*1000) syncFreee(false);
 })();
 // アプリに戻ってきたときも、ほかの端末での変更を取り込む
-document.addEventListener("visibilitychange", ()=>{ if (!document.hidden) pullData(); });
+document.addEventListener("visibilitychange", ()=>{ if (!document.hidden) pullData().then(pullPlan); });
 </script>
