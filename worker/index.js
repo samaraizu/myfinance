@@ -26,7 +26,7 @@ export default {
       const path = url.pathname === "/" ? "/index.html" : url.pathname;
       const file = FILES[path] ? path : (path.includes(".") ? null : "/index.html");
       res = file
-        ? new Response(request.method === "HEAD" ? null : bytesOf(file), { headers: { "Content-Type": FILES[file].type, "Cache-Control": file === "/sw.js" || file === "/index.html" ? "no-cache" : "public, max-age=3600" } })
+        ? new Response(request.method === "HEAD" ? null : bytesOf(file), { headers: { "Content-Type": FILES[file].type, "Cache-Control": file === "/sw.js" || file === "/index.html" || file.endsWith(".webmanifest") || file.includes("apple-touch") ? "no-cache" : "public, max-age=3600" } })
         : new Response("Not found", { status: 404 });
     }
     res = new Response(res.body, res);

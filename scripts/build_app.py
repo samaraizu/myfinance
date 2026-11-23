@@ -15,10 +15,10 @@ page = f"""<!doctype html>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="myfinance">
 <meta name="robots" content="noindex">
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48.png">
-<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
-<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest?v=2">
+<link rel="icon" type="image/png" sizes="48x48" href="/icons/owl-48.png?v=2">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/owl-192.png?v=2">
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/owl-touch-180.png?v=2">
 <link rel="apple-touch-startup-image" href="/icons/splash.png">
 <meta property="og:title" content="myfinance">
 <meta property="og:image" content="https://myfinance.toneclown17.workers.dev/icons/og.png">
