@@ -1613,6 +1613,25 @@ $("fDate").value = TODAY_ISO;
 load();
 applyStyle();
 render();
+// 受け取り箱: /inbox.json に置かれた欲しいものを、まだ取り込んでいない分だけ追加する（ホーム画面のアプリでも届く）
+(async()=>{
+  try {
+    const r = await fetch("/inbox.json", {cache:"no-store"}); if (!r.ok) return;
+    const box = await r.json(); let seen = [];
+    try { seen = JSON.parse(localStorage.getItem("mf-inbox-seen") || "[]"); } catch(e){}
+    let n = 0;
+    for (const w of box.wish || []){
+      if (!w.id || seen.includes(w.id)) continue;
+      seen.push(w.id);
+      const name = String(w.name||"").slice(0,80).trim(), price = Math.round(+w.price||0);
+      if (!name || price<=0 || WISH.some(x=>x.name===name && x.price===price)) continue;
+      WISH.push({id:"w"+Date.now()+n, name, price, cat: CAT_ORDER.includes(w.cat) ? w.cat : "Other", prio: ["h","m","l"].includes(w.prio) ? w.prio : "m", on:false, note:String(w.note||"").slice(0,60)});
+      n++;
+    }
+    try { localStorage.setItem("mf-inbox-seen", JSON.stringify(seen)); } catch(e){}
+    if (n){ render(); toast(`Added ${n} item${n>1?"s":""} to the wishlist`); }
+  } catch(e){}
+})();
 // リンクで欲しいものを追加: /?wish=<JSON配列をURLエンコード>  [{name, price, cat, prio, note}]
 (()=>{
   const q = new URLSearchParams(location.search).get("wish"); if (!q) return;

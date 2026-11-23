@@ -10,3 +10,4 @@
 - Style: Night (navy cards, cyan for actions, lime for money, rounded). See design-system/.
 - Receipt photos are read with Google Cloud Vision (TEXT detection), the same API and key as Smart Ledger. The key is saved only on the phone (••• settings) and the phone calls Vision directly. The text is turned into store, date, total, payment and items in the app.
 - Card statements come straight from freee (company `samaraizu`, id 10178178): the Worker reads credit-card wallet_txns for the current month through `worker/freee.js`. freee tokens live only in Workers KV (`MF_KV`); the phone sends the `APP_KEY` secret as a passcode. Card expenses arrive as charges; a card receipt registered earlier with the same amount within 3 days is merged into the charge. Refunds and cashback (income) are not shown yet.
+- Wishlist items Claude adds go into `app/inbox.json` (deploy to deliver). The app merges each inbox id once, so items removed on the phone do not come back.
