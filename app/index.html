@@ -125,7 +125,10 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .hero-nums b{color:#fff!important}
 .hero-rate{padding:10px 12px;border-radius:12px}
 .hero-rate .meter{background:rgba(255,255,255,.28)}
-.hero-rate .seg.spent{background:#fff}
+.hero-rate .seg.spent{background:linear-gradient(90deg,#2f6bff,#5aa8ff 60%,#8fd8ff);border-radius:999px}
+.hero-rate.over-limit .seg.spent{background:linear-gradient(90deg,#ff6b6b,#e02424);border-radius:999px}
+.hero-rate .seg.over{display:none}
+.hero-rate.over-limit p{color:#ffb3b3!important}
 .hero-rate .pace{border-left-color:#fff}
 .hero-rate p{color:rgba(255,255,255,.85)!important}
 .night-hero .tabs{border-bottom-color:var(--line)}
@@ -794,7 +797,8 @@ function render(){
   Object.assign($("segOver").style, {left: (100-over/BUDGET*100)+"%", width: (over/BUDGET*100)+"%"});
   $("pace").style.left = (ideal/BUDGET*100)+"%";
   $("lgSpent").textContent = yen(spent);
-  $("rateTxt").textContent = `${Math.round(spent/BUDGET*100)}% used · pace ${Math.round(DAY/DAYS*100)}%`;
+  $("rateTxt").textContent = `${Math.round(spent/BUDGET*100)}% used · pace ${Math.round(DAY/DAYS*100)}%` + (spent > BUDGET ? ` · over by ${yen(spent-BUDGET)}` : "");
+  document.querySelector(".hero-rate").classList.toggle("over-limit", spent > BUDGET);
   $("lgPlan").textContent = yen(plan);
   $("lgPace").textContent = (diff>=0?"+":"−") + yen(Math.abs(diff));
   $("netline").innerHTML = `Card <span class="num">${yen(cardTotal)}</span> − paybacks <b class="num">${yen(backIn)}</b>`
