@@ -97,6 +97,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .hero-nums small{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .catsel{margin:2px 0 6px}
 .catsel select{min-height:44px}
+.hero-rate{width:100%;display:grid;gap:6px}
+.hero-rate .meter{margin:4px 0 0;height:10px;border:0;background:color-mix(in srgb,var(--ink) 16%,transparent)}
+.hero-rate .seg.plan{display:none}
+.hero-rate .pace{top:-4px;bottom:-4px;border-left:2px solid var(--ink)}
+.hero-rate p{margin:0;text-align:right;color:var(--muted)}
 /* スタイル切り替え（試作用） */
 .styles{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
 .styles::-webkit-scrollbar{display:none}
@@ -355,6 +360,15 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
       <div><small>Spent this month</small><b class="num" id="heroSpent"></b></div>
       <div><small>Budget left</small><b class="num" id="heroLeft"></b></div>
     </div>
+    <div class="hero-rate">
+      <div class="meter">
+        <div class="seg spent" id="segSpent"></div>
+        <div class="seg plan" id="segPlan"></div>
+        <div class="seg over" id="segOver"></div>
+        <div class="pace" id="pace"></div>
+      </div>
+      <p class="num" id="rateTxt"></p>
+    </div>
     <button class="pillbtn" type="button" id="nightAdd" hidden>＋ Add</button>
     <div class="tabs" role="tablist" aria-label="Views">
       <button type="button" role="tab" id="tabSummary" aria-selected="true" data-tab="summary">Summary</button>
@@ -377,21 +391,9 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <b id="perDay"></b><div id="netline"></div>
   </div>
 
-  <section class="card" aria-label="Spending rate" data-tab="summary">
-    <h2>Spending rate <span class="num" id="rateTxt"></span></h2>
-    <div class="meter">
-      <div class="seg spent" id="segSpent"></div>
-      <div class="seg plan" id="segPlan"></div>
-      <div class="seg over" id="segOver"></div>
-      <div class="pace" id="pace"><span>Today's pace</span></div>
-    </div>
-    <div class="scale num"><span>0</span><span id="scaleMid">50k</span><span id="scaleMax">100k</span></div>
-    <div class="legend">
-      <div class="l-spent"><small>Net spent</small><span class="num" id="lgSpent"></span></div>
-      <div class="l-plan"><small>Planned</small><span class="num" id="lgPlan"></span></div>
-      <div class="l-free"><small>vs. pace</small><span class="num" id="lgPace"></span></div>
-    </div>
-  </section>
+  <div hidden aria-hidden="true">
+    <span id="scaleMid"></span><span id="scaleMax"></span><span id="lgSpent"></span><span id="lgPlan"></span><span id="lgPace"></span>
+  </div>
 
   <section class="card" aria-label="Paybacks" data-tab="details" hidden>
     <h2>Paybacks <span id="bSplit"></span></h2>
@@ -761,7 +763,7 @@ function render(){
   Object.assign($("segOver").style, {left: (100-over/BUDGET*100)+"%", width: (over/BUDGET*100)+"%"});
   $("pace").style.left = (ideal/BUDGET*100)+"%";
   $("lgSpent").textContent = yen(spent);
-  $("rateTxt").textContent = `${Math.round(spent/BUDGET*100)}% used · day ${DAY} of ${DAYS}`;
+  $("rateTxt").textContent = `${Math.round(spent/BUDGET*100)}% used · pace ${Math.round(DAY/DAYS*100)}%`;
   $("lgPlan").textContent = yen(plan);
   $("lgPace").textContent = (diff>=0?"+":"−") + yen(Math.abs(diff));
   $("netline").innerHTML = `Card <span class="num">${yen(cardTotal)}</span> − paybacks <b class="num">${yen(backIn)}</b>`
