@@ -137,6 +137,13 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .intro .cat:nth-child(5) .bar2 i{animation-delay:1.04s}.intro .cat:nth-child(6) .bar2 i{animation-delay:1.1s}.intro .cat:nth-child(n+7) .bar2 i{animation-delay:1.16s}
 .intro .wish{animation:mf-rise .5s .7s cubic-bezier(.2,.8,.2,1) both}
 @media (prefers-reduced-motion:reduce){.intro *{animation:none!important}}
+.wish-row{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;min-height:56px;padding:10px 14px;font:inherit;color:var(--ink);text-align:left;background:var(--paper);border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.wish-row.on{border:1.5px solid var(--ink);background:var(--ink-soft)}
+.wish-row .name{font-weight:600;min-width:0;overflow-wrap:anywhere;line-height:1.35}
+.ws-photo{position:relative;display:grid;place-items:center;aspect-ratio:4/3;max-width:100%;border:1px dashed var(--line);border-radius:12px;background:var(--bg);overflow:hidden;color:var(--muted);font-size:13px;margin-top:6px}
+.ws-photo img{width:100%;height:100%;object-fit:cover}
+.ws-pick{display:grid;place-items:center;position:relative}
+.ws-pick input{position:absolute;width:1px;height:1px;opacity:0}
 /* スタイル切り替え（試作用） */
 .styles{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
 .styles::-webkit-scrollbar{display:none}
@@ -441,7 +448,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   </section>
 
   <section class="card" aria-label="Wishlist" data-tab="summary">
-    <h2>Wishlist <span>Check = buying this month</span></h2>
+    <h2>Wishlist <span>Tap for details</span></h2>
     <div class="wishes" id="wishes"></div>
     <button class="more" type="button" id="wishAddOpen">＋ Add an item</button>
     <form class="add-inline" id="wishForm" hidden novalidate>
@@ -527,6 +534,28 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
       <button class="btn" type="button" id="rcptSave">Save receipt</button>
     </div>
   </div>
+</div>
+
+<div class="sheet" id="wishSheet" role="dialog" aria-modal="true" aria-labelledby="wsTitle" hidden>
+  <div class="grip"></div>
+  <h3 id="wsTitle">Wishlist item</h3>
+  <div class="ws-photo" id="wsPhoto"><span id="wsPhotoEmpty">No photo yet</span><img id="wsImg" alt="" hidden></div>
+  <div class="two" style="margin:8px 0 14px">
+    <label class="btn ghost ws-pick" for="wsLib">Choose photo<input type="file" id="wsLib" accept="image/*"></label>
+    <button class="btn ghost" type="button" id="wsImgDel">Remove photo</button>
+  </div>
+  <form id="wsForm" novalidate style="display:grid;gap:12px">
+    <label class="field">Item<input type="text" id="wsName" autocomplete="off" maxlength="80" placeholder="Winter coat"></label>
+    <div class="two">
+      <label class="field">Price (¥)<input type="number" id="wsPrice" inputmode="numeric" min="1" step="1"></label>
+      <label class="field">Priority<select id="wsPrio"><option value="h">High</option><option value="m">Mid</option><option value="l">Low</option></select></label>
+    </div>
+    <label class="field">Category<select id="wsCat"></select></label>
+    <label class="field">Note<input type="text" id="wsNote" autocomplete="off" maxlength="80" placeholder="Where to buy, size, color"></label>
+    <label class="chk"><input type="checkbox" id="wsOn">Buying this month (counts toward the budget)</label>
+    <div class="err" id="wsErr" role="alert"></div>
+    <div class="actions"><button class="btn ghost" type="button" id="wsDelete">Delete</button><button class="btn" type="submit">Save</button></div>
+  </form>
 </div>
 
 <div class="sheet" id="setSheet" role="dialog" aria-modal="true" aria-labelledby="setTitle" hidden>
@@ -827,13 +856,9 @@ function render(){
 
   // 欲しいもの
   $("wishes").innerHTML = WISH.length ? WISH.map(w => `
-    <label class="wish ${w.on?"on":""}">
-      <input type="checkbox" id="${w.id}" ${w.on?"checked":""} data-wish="${w.id}">
-      <div><div class="name">${esc(w.name)}<span class="prio ${w.prio}">${{h:"High",m:"Mid",l:"Low"}[w.prio]}</span></div>
-      <div class="meta">${esc(w.cat)}${w.note?" · "+esc(w.note):""}</div></div>
-      <span class="num">${yen(w.price)}</span>
-      <button class="del" type="button" data-delwish="${w.id}" aria-label="Remove ${esc(w.name)}">×</button>
-    </label>`).join("") : `<div class="empty-note">Nothing on the wishlist yet. Add what you plan to buy.</div>`;
+    <button type="button" class="wish-row ${w.on?"on":""}" data-openwish="${w.id}" aria-label="${esc(w.name)}, ${yen(w.price)}${w.on?", buying this month":""}">
+      <span class="name">${esc(w.name)}</span><span class="num">${yen(w.price)}</span>
+    </button>`).join("") : `<div class="empty-note">Nothing on the wishlist yet. Add what you plan to buy.</div>`;
   $("wishTotal").textContent = yen(plan);
   const nextOff = WISH.filter(w=>!w.on).sort((a,b)=>a.price-b.price)[0];
   $("wishHint").textContent = nextOff
@@ -886,7 +911,7 @@ function render(){
 const STORE = "mf-data-v1";
 function save(){
   const fcards = Object.fromEntries(Object.entries(CARDS).filter(([k])=>k.startsWith("fc")));
-  try { localStorage.setItem(STORE, JSON.stringify({v:1, budget:BUDGET, sample:SAMPLE, TX, BACKS, WISH, fcards, freeeSync:FREEE_SYNC})); } catch(e){}
+  try { localStorage.setItem(STORE, JSON.stringify({v:1, budget:BUDGET, sample:SAMPLE, TX, BACKS, WISH, fcards, freeeSync:FREEE_SYNC})); } catch(e){ if (typeof toast==="function") toast("Could not save: phone storage is full. Remove a photo or two."); }
 }
 function load(){
   try {
@@ -929,7 +954,7 @@ function updatePreview(){
     : `${esc(t.m)} net <b class="num">${yen(t.amt-received(t))}</b> → <b class="num">${yen(t.amt-received(t)-a)}</b>`;
 }
 function closeAll(){
-  ["sheet","amexSheet","amzSheet","ppSheet","rcptSheet","setSheet","scrim","menu"].forEach(id=>$(id).hidden=true);
+  ["sheet","amexSheet","amzSheet","ppSheet","rcptSheet","setSheet","wishSheet","scrim","menu"].forEach(id=>$(id).hidden=true);
   $("openForm").hidden=false; $("openForm").setAttribute("aria-expanded","false");
   document.body.style.overflow="";
 }
@@ -1518,7 +1543,46 @@ function wishForm(show){
   $("wishForm").hidden = !show; $("wishAddOpen").hidden = show;
   if (show){ $("wCat").innerHTML = CAT_ORDER.map(c=>`<option>${c}</option>`).join(""); $("wErr").textContent = ""; $("wName").focus(); }
 }
-$("wishAddOpen").addEventListener("click", ()=>wishForm(true));
+// 欲しいもの: 一覧はタイトルと金額だけ。タップで詳細シート（写真・メモ・今月買う・削除）
+let wsId = null, wsImgData = null, wsDelArmed = false;
+function openWish(id){
+  const w = WISH.find(x=>x.id===id) || {name:"", price:"", cat:"Other", prio:"m", note:"", on:false, img:""};
+  wsId = id; wsImgData = w.img || ""; wsDelArmed = false;
+  $("wsTitle").textContent = id ? "Wishlist item" : "New wishlist item";
+  $("wsName").value = w.name; $("wsPrice").value = w.price || ""; $("wsNote").value = w.note || ""; $("wsOn").checked = !!w.on;
+  $("wsCat").innerHTML = CAT_ORDER.map(c=>`<option ${c===w.cat?"selected":""}>${c}</option>`).join(""); $("wsPrio").value = w.prio || "m";
+  $("wsDelete").hidden = !id; $("wsDelete").textContent = "Delete"; $("wsErr").textContent = "";
+  showWsImg();
+  $("menu").hidden = true; $("wishSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true; document.body.style.overflow = "hidden";
+}
+function showWsImg(){ const img = $("wsImg"); img.hidden = !wsImgData; $("wsPhotoEmpty").hidden = !!wsImgData; $("wsImgDel").hidden = !wsImgData; if (wsImgData) img.src = wsImgData; else img.removeAttribute("src"); }
+$("wishes").addEventListener("click", e=>{ const b = e.target.closest("[data-openwish]"); if (b) openWish(b.dataset.openwish); });
+$("wishAddOpen").addEventListener("click", ()=>openWish(null));
+$("wsLib").addEventListener("change", async e=>{
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try {
+    // 写真は長辺800pxのJPEGに縮めてスマホに保存
+    const url = URL.createObjectURL(f), img = new Image();
+    await new Promise((ok,ng)=>{ img.onload = ok; img.onerror = ng; img.src = url; });
+    const k = Math.min(1, 800/Math.max(img.width, img.height)), c = document.createElement("canvas");
+    c.width = Math.round(img.width*k); c.height = Math.round(img.height*k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url); wsImgData = c.toDataURL("image/jpeg", 0.8); showWsImg();
+  } catch(err){ $("wsErr").textContent = "This file could not be opened as a photo."; }
+});
+$("wsImgDel").addEventListener("click", ()=>{ wsImgData = ""; showWsImg(); });
+$("wsForm").addEventListener("submit", e=>{
+  e.preventDefault();
+  const name = $("wsName").value.trim(), price = Math.round(+$("wsPrice").value || 0);
+  if (!name) return $("wsErr").textContent = "Enter what you want to buy";
+  if (price <= 0) return $("wsErr").textContent = "Enter a price of ¥1 or more";
+  const data = {name, price, cat:$("wsCat").value, prio:$("wsPrio").value, note:$("wsNote").value.trim(), on:$("wsOn").checked, img:wsImgData || ""};
+  if (wsId) Object.assign(WISH.find(x=>x.id===wsId), data); else WISH.push({id:"w"+Date.now(), ...data});
+  closeAll(); render(); toast(wsId ? `Saved ${name}` : `Added ${name} · ${yen(price)}`);
+});
+$("wsDelete").addEventListener("click", ()=>{
+  if (!wsDelArmed){ wsDelArmed = true; $("wsDelete").textContent = "Tap again to delete"; return; }
+  const w = WISH.find(x=>x.id===wsId); WISH = WISH.filter(x=>x.id!==wsId); closeAll(); render(); toast(`Removed ${w.name}`);
+});
 $("wCancel").addEventListener("click", ()=>{ $("wishForm").reset(); wishForm(false); });
 $("wishForm").addEventListener("submit", e=>{
   e.preventDefault();
@@ -1605,15 +1669,20 @@ render();
     try { seen = JSON.parse(localStorage.getItem("mf-inbox-seen") || "[]"); } catch(e){}
     let n = 0;
     for (const w of box.wish || []){
-      if (!w.id || seen.includes(w.id)) continue;
+      if (!w.id) continue;
+      if (seen.includes(w.id)){
+        const have = WISH.find(x=>x.name===w.name && x.price===w.price);
+        if (have && !have.img && typeof w.image==="string" && w.image.startsWith("/img/")){ have.img = w.image; n++; }
+        continue;
+      }
       seen.push(w.id);
       const name = String(w.name||"").slice(0,80).trim(), price = Math.round(+w.price||0);
       if (!name || price<=0 || WISH.some(x=>x.name===name && x.price===price)) continue;
-      WISH.push({id:"w"+Date.now()+n, name, price, cat: CAT_ORDER.includes(w.cat) ? w.cat : "Other", prio: ["h","m","l"].includes(w.prio) ? w.prio : "m", on:false, note:String(w.note||"").slice(0,60)});
+      WISH.push({id:"w"+Date.now()+n, name, price, cat: CAT_ORDER.includes(w.cat) ? w.cat : "Other", prio: ["h","m","l"].includes(w.prio) ? w.prio : "m", on:false, note:String(w.note||"").slice(0,60), img: typeof w.image==="string" && w.image.startsWith("/img/") ? w.image : ""});
       n++;
     }
     try { localStorage.setItem("mf-inbox-seen", JSON.stringify(seen)); } catch(e){}
-    if (n){ render(); toast(`Added ${n} item${n>1?"s":""} to the wishlist`); }
+    if (n){ render(); toast(`Wishlist updated (${n})`); }
   } catch(e){}
 })();
 // リンクで欲しいものを追加: /?wish=<JSON配列をURLエンコード>  [{name, price, cat, prio, note}]

@@ -1,7 +1,23 @@
 {
   "note": "Items Claude adds for you. The app merges each id once.",
   "wish": [
-    {"id": "inbox-2026-11-23-ipad-air", "name": "11インチiPad Air Wi-Fi 128GB スペースグレイ", "price": 129800, "cat": "Gadgets", "prio": "m", "note": "Apple Store"},
-    {"id": "inbox-2026-11-23-mac-mini", "name": "M6チップ搭載Mac mini", "price": 221800, "cat": "Gadgets", "prio": "m", "note": "Apple Store"}
+    {
+      "id": "inbox-2026-11-23-ipad-air",
+      "name": "11インチiPad Air Wi-Fi 128GB スペースグレイ",
+      "price": 129800,
+      "cat": "Gadgets",
+      "prio": "m",
+      "note": "Apple Store",
+      "image": "/img/wish/ipad-air.webp"
+    },
+    {
+      "id": "inbox-2026-11-23-mac-mini",
+      "name": "M6チップ搭載Mac mini",
+      "price": 221800,
+      "cat": "Gadgets",
+      "prio": "m",
+      "note": "Apple Store",
+      "image": "/img/wish/mac-mini.webp"
+    }
   ]
 }
