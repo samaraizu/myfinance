@@ -1426,7 +1426,7 @@ document.querySelectorAll("section.card > h2").forEach(h=>{
   if (t){ const box = document.createElement("span"); box.className = "ttl"; box.textContent = t.textContent.trim(); h.replaceChild(box, t); }
 });
 // FV の日付
-$("heroDate").textContent = TODAY.toLocaleDateString("en-US", {weekday:"short", year:"numeric", month:"short", day:"numeric"});
+$("heroDate").textContent = `${TODAY.getFullYear()}.${String(TODAY.getMonth()+1).padStart(2,"0")}.${String(TODAY.getDate()).padStart(2,"0")} ${TODAY.toLocaleDateString("en-US",{weekday:"short"})}`;
 // Summary / Details タブ
 function showTab(tab){
   document.querySelectorAll("section.card[data-tab]").forEach(sec=>sec.hidden = sec.dataset.tab !== tab);
