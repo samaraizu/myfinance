@@ -294,6 +294,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .tag.card{background:var(--bg)}
 .tag.amz{border-color:var(--plan);color:var(--plan)}
 .tag.amx{border-color:var(--ink);color:var(--ink)}
+.tag.pp{border-color:var(--accent);color:var(--accent)}
 .tag.rcp{border-color:var(--accent);color:var(--accent)}
 .st{font-size:10px;font-weight:700;border-radius:0;padding:0 5px;white-space:nowrap}
 .st.ok{background:var(--accent-soft);color:var(--ok)}
@@ -653,7 +654,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <label class="drop" for="ppFile">
       <input type="file" id="ppFile" accept="image/*" multiple>
       <b>Choose screenshots</b>
-      <small>Received transfers are read. Payments you made are skipped.</small>
+      <small>Money received becomes a payback. Money you sent is logged as spending.</small>
     </label>
     <button class="linkbtn" type="button" id="ppSample">Try with a sample screenshot</button>
   </div>
@@ -960,7 +961,7 @@ function render(){
   const rows = TX.filter(t => (cardFilter==="all" || t.card===cardFilter)
     && (filter==="All" || (t.splits ? t.splits.some(s=>s[1]===filter) : t.cat===filter)));
   const stLabel = {ok:["ok","Matched"], fill:["fill","Itemized"], miss:["miss","Needs receipt"]};
-  const srcLabel = {amz:["amz","Amazon"], rcp:["rcp","Receipt"], amx:["amx","Amex sheet"], freee:["","freee"]};
+  const srcLabel = {amz:["amz","Amazon"], rcp:["rcp","Receipt"], amx:["amx","Amex sheet"], pp:["pp","PayPay"], freee:["","freee"]};
 const catSel = (attr, cur) => `<select class="tag-sel" ${attr} aria-label="Change category">${CAT_ORDER.map(c=>`<option ${c===cur?"selected":""}>${c}</option>`).join("")}</select>`;
   $("tx").innerHTML = rows.length ? rows.map(t=>{
     const st = (t.st==="miss" && /AMAZON/.test(t.m)) ? ["miss","Needs order"] : stLabel[t.st], r = received(t);
@@ -1157,6 +1158,7 @@ function parsePayPay(res){
   }
   return rows;
 }
+const ppName = r => `PayPay · ${r.who}`;
 async function readPP(shots, files){
   ppShots = shots; ppStep("reading");
   $("ppReadingText").textContent = `Reading ${shots.length} screenshot${shots.length>1?"s":""}…`;
@@ -1179,7 +1181,10 @@ async function readPP(shots, files){
   }
   $("ppNote").textContent = note;
   ppRows = raw.map((r,i)=>{
-    if (r.dir==="out") return {...r, i, st:"out", on:false};
+    if (r.dir==="out"){
+      if (TX.some(t=>t.src.includes("pp") && t.m===ppName(r) && t.amt===r.amt && mdNum(t.d)===mdNum(r.d))) return {...r, i, st:"dup", on:false};
+      return {...r, i, st:"sent", cat:CAT_ORDER.includes("Friends")?"Friends":"Other", on:true};
+    }
     if (BACKS.some(b=>b.who===r.who && b.amt===r.amt && b.date && mdNum(b.date)===mdNum(r.d) && b.status==="in" && b.method==="paypay")) return {...r, i, st:"dup", on:false};
     const wait = BACKS.find(b=>b.who===r.who && b.amt===r.amt && b.status==="wait");
     if (wait) return {...r, i, st:"settle", back:wait, on:true};
@@ -1189,24 +1194,27 @@ async function readPP(shots, files){
 }
 function renderPP(){
   $("ppShots").innerHTML = ppShots.map(s=>`<div class="shot" style="${s.url?`background-image:url(${s.url})`:""}">${s.url?"":s.name}</div>`).join("");
-  const why = {dup:"Already logged · skipped", out:"Payment you made · not a payback"};
+  const why = {dup:"Already logged · skipped"};
   $("ppRows").innerHTML = ppRows.map(r=>{
     const t = r.back ? txById(r.back.tx) : null;
     const body = r.st==="settle" ? `<div class="mt">Settles pending payback · <b>${short(t.card)} · ${t.d} ${esc(t.m)}</b></div>`
       : r.st==="new" ? `<div class="mt">${r.msg?`“${r.msg}” · `:""}Pick the charge it splits</div>
           <select data-ptx="${r.i}" aria-label="Charge for ${r.who}" style="font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:0;min-height:40px;padding:0 8px;min-width:0">
           ${TX.map(x=>`<option value="${x.id}" ${x.id===r.tx?"selected":""}>${short(x.card)} · ${x.d} ${esc(x.m)} ${yen(x.amt)}</option>`).join("")}</select>`
+      : r.st==="sent" ? `<div class="mt">Payment you made · logged as spending</div>
+          <select data-pcat="${r.i}" aria-label="Category for ${r.who}" style="font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:0;min-height:40px;padding:0 8px;min-width:0">
+          ${CAT_ORDER.filter(c=>c!=="Subscriptions").map(c=>`<option value="${c}" ${c===r.cat?"selected":""}>${c}</option>`).join("")}</select>`
       : `<div class="mt">${why[r.st]}</div>`;
-    return `<div class="order ${r.on?"on":""} ${r.st==="dup"||r.st==="out"?"skip":""}">
-      <div class="oh"><input type="checkbox" data-pp="${r.i}" ${r.on?"checked":""} ${r.st==="dup"||r.st==="out"?"disabled":""} aria-label="Log ${r.who}">
+    return `<div class="order ${r.on?"on":""} ${r.st==="dup"?"skip":""}">
+      <div class="oh"><input type="checkbox" data-pp="${r.i}" ${r.on?"checked":""} ${r.st==="dup"?"disabled":""} aria-label="Log ${r.who}">
         <span class="t">${r.dir==="in"?"From":"To"} ${r.who} · <span class="num">${r.d}</span></span><span class="num">${r.dir==="in"?"+":"−"}${yen(r.amt)}</span></div>
       ${body}</div>`;
   }).join("");
   const pick = ppRows.filter(r=>r.on);
   $("ppCount").textContent = `${pick.length} of ${ppRows.length} rows selected`;
-  $("ppTotal").textContent = yen(pick.reduce((a,r)=>a+r.amt,0));
+  $("ppTotal").textContent = yen(pick.reduce((a,r)=>a+(r.dir==="out"?-r.amt:r.amt),0));
   $("ppAdd").disabled = !pick.length;
-  $("ppAdd").textContent = pick.length ? `Log ${pick.length} payback${pick.length>1?"s":""}` : "Nothing to log";
+  $("ppAdd").textContent = pick.length ? `Log ${pick.length} transfer${pick.length>1?"s":""}` : "Nothing to log";
 }
 $("ppFile").addEventListener("change", e=>{
   const files = [...e.target.files]; if (!files.length) return;
@@ -1217,16 +1225,19 @@ $("ppRows").addEventListener("change", e=>{
   const a = e.target.dataset;
   if (a.pp!==undefined){ ppRows[+a.pp].on = e.target.checked; renderPP(); }
   if (a.ptx!==undefined){ ppRows[+a.ptx].tx = e.target.value; }
+  if (a.pcat!==undefined){ ppRows[+a.pcat].cat = e.target.value; }
 });
 $("ppAdd").addEventListener("click", ()=>{
   const pick = ppRows.filter(r=>r.on);
   pick.forEach(r=>{
-    if (r.st==="settle"){ Object.assign(r.back, {status:"in", method:"paypay", date:r.d, via:"shot"}); }
+    if (r.st==="sent"){ TX.push({id:"p"+Date.now()+r.i, d:`${+r.d.split("/")[0]}/${+r.d.split("/")[1]}`, card:"cash", m:ppName(r), amt:r.amt, src:["pp"], st:"ok", cat:r.cat}); }
+    else if (r.st==="settle"){ Object.assign(r.back, {status:"in", method:"paypay", date:r.d, via:"shot"}); }
     else BACKS.push({id:"b"+Date.now()+r.i, tx:r.tx, who:r.who, amt:r.amt, method:"paypay", status:"in", date:r.d, via:"shot"});
   });
   $("ppSync").textContent = "just now";
+  TX.sort((a,b)=>mdNum(b.d)-mdNum(a.d));
   closeAll(); render();
-  toast(`Logged ${pick.length} PayPay payback${pick.length>1?"s":""} · ${yen(pick.reduce((a,r)=>a+r.amt,0))}`);
+  toast(`Logged ${pick.length} PayPay transfer${pick.length>1?"s":""} · ${yen(pick.reduce((a,r)=>a+(r.dir==="out"?-r.amt:r.amt),0))}`);
 });
 
 // Amazon取り込み：注文履歴スクショ → 注文と品目を読む → カードのAMAZON明細と合計額で突合 → 品目で分割
