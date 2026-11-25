@@ -110,6 +110,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .hero-nums div{border:1px solid rgba(255,255,255,.35)!important;border-radius:12px}
 .hero-nums small{color:rgba(255,255,255,.78)!important}
 .hero-nums b{color:#fff!important}
+.hero-nums .fixed{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-radius:12px}
+.hero-nums .fixed b{font-size:15px;font-weight:600}
 .hero-rate{padding:10px 12px;border-radius:12px}
 .hero-rate .meter{background:rgba(255,255,255,.28)}
 .hero-rate .seg.spent{background:linear-gradient(90deg,#2f6bff,#5aa8ff 60%,#8fd8ff);border-radius:999px}
@@ -421,6 +423,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <div class="hero-nums">
       <div class="glass"><small>Spent this month</small><b class="num" id="heroSpent"></b></div>
       <div class="glass"><small>Budget left</small><b class="num" id="heroLeft"></b></div>
+      <div class="glass fixed"><small>Fixed subscriptions · monthly</small><b class="num" id="heroFixed"></b></div>
     </div>
     <div class="hero-rate glass">
       <div class="meter">
@@ -744,6 +747,7 @@ const TODAY = new Date();
 const DAY = TODAY.getDate(), DAYS = new Date(TODAY.getFullYear(), TODAY.getMonth()+1, 0).getDate();
 const TODAY_MD = `${TODAY.getMonth()+1}/${DAY}`;
 const TODAY_ISO = `${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,"0")}-${String(DAY).padStart(2,"0")}`;
+const FIXED_SUBS = 300000;  // サブスクで毎月固定で発生する額（表示のみ。予算の計算には入れない）
 let BUDGET = 100000, CAT_BUDGET = {}, SUBS = [], DIS_DATES = [], SAMPLE = true, FREEE_SYNC = "", COUNT_TOKEN = 0;
 const esc = v => String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const yen = n => (n < 0 ? "-¥" : "¥") + Math.abs(Math.round(n)).toLocaleString("en-US");
@@ -854,6 +858,7 @@ function render(){
   $("miniFree").textContent = yen(BUDGET - spent);
   COUNT_TOKEN++;  // 数え上げ中に中身が変わったら、最新の金額を優先する
   $("heroSpent").textContent = yen(spent); $("heroLeft").textContent = yen(BUDGET - spent);
+  $("heroFixed").textContent = yen(FIXED_SUBS);
   $("perDay").textContent = yen(Math.max(free,0)/daysLeft);
   const pill = $("pacePill");
   if (free < 0){ pill.className="pill bad"; pill.textContent = "Over by "+yen(-free)+" with plans"; }
