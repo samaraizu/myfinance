@@ -641,7 +641,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <div class="shots" id="ppShots"></div>
     <div id="ppRows" style="display:grid;gap:12px"></div>
     <div class="sumline"><span id="ppCount"></span><b id="ppTotal"></b></div>
-    <p class="lead" style="margin:0">Prototype: reading is simulated with sample transfers.</p>
+    <p class="lead" id="ppNote" style="margin:0"></p>
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Cancel</button>
       <button class="btn" type="button" id="ppAdd">Log paybacks</button>
@@ -1093,24 +1093,78 @@ function openPP(){
   $("menu").hidden = true; $("ppSheet").hidden = $("scrim").hidden = false; $("openForm").hidden = true;
   document.body.style.overflow = "hidden"; ppStep("pick"); $("ppFile").value = "";
 }
+// 受け取った日以前のカード明細のうち、金額が足りるもので一番日付が近いものを初期値にする
 function guessTx(r){
-  const words = r.msg.toUpperCase().split(/\s+/).filter(w=>w.length>2);
-  const byMsg = TX.find(t=>words.some(w=>t.m.replace(/[^A-Z]/g,"").includes(w.replace(/[^A-Z]/g,""))));
-  return (byMsg || TX.find(t=>t.amt > r.amt) || TX[0]).id;
+  const words = (r.msg||"").toUpperCase().split(/\s+/).filter(w=>w.length>2);
+  const byMsg = words.length && TX.find(t=>words.some(w=>t.m.replace(/[^A-Z]/g,"").includes(w.replace(/[^A-Z]/g,""))));
+  const near = TX.filter(t=>t.amt>=r.amt && mdNum(t.d)<=mdNum(r.d)).sort((a,b)=>mdNum(b.d)-mdNum(a.d) || a.amt-b.amt)[0];
+  return (byMsg || near || TX.find(t=>t.amt > r.amt) || TX[0]).id;
 }
-function readPP(shots){
+// PayPay取引履歴スクショの読み取り結果（Vision）→ 受け取り(in)/送る(out)の行。
+// 行ごとに「〇〇さんから受け取る / 〇〇さんに送る」「日時」「金額」が並ぶので、位置で組み合わせる
+function parsePayPay(res){
+  const H = res?.fullTextAnnotation?.pages?.[0]?.height || 0;
+  const ev = [];
+  let pid = 0;
+  for (const pg of res?.fullTextAnnotation?.pages||[]) for (const bl of pg.blocks||[]) for (const pa of bl.paragraphs||[]){
+    pid++;
+    const text = (pa.words||[]).map(w=>(w.symbols||[]).map(s=>s.text).join("")).join("").replace(/\s+/g,"");
+    const v = pa.boundingBox?.vertices||[];
+    const ys = v.map(p=>p.y||0), xs = v.map(p=>p.x||0);
+    const yc = ys.length ? (Math.min(...ys)+Math.max(...ys))/2 : 0, x = xs.length ? Math.min(...xs) : 0;
+    const flat = text.replace(/受け取り完了|残高カード|残高/g,"|")
+      .replace(/\d{4}年\d{1,2}月\d{1,2}日\d{1,2}時\d{1,2}分/g,"|").replace(/[\d,]+円/g,"|");
+    let m;
+    const nameRe = /([^|]{1,24}?)さん(から受け取る|に送る)/g;
+    while ((m = nameRe.exec(flat))) ev.push({k:"name", who:m[1], dir:m[2]==="に送る"?"out":"in", pid, yc, x});
+    const dateRe = /(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分/g;
+    while ((m = dateRe.exec(text))) ev.push({k:"date", mo:+m[2], da:+m[3], h:+m[4], mi:+m[5], pid, yc, x});
+    const amtRe = /(\d{1,3}(?:,\d{3})*|\d+)円/g;
+    while ((m = amtRe.exec(text))) ev.push({k:"amt", amt:+m[1].replace(/,/g,""), pid, yc, x});
+  }
+  const near = H*0.045;
+  const names = ev.filter(e=>e.k==="name"), dates = ev.filter(e=>e.k==="date"), amts = ev.filter(e=>e.k==="amt");
+  const rows = [];
+  for (const n of names){
+    const a = amts.map(e=>({e, dy:Math.abs(e.yc-n.yc)})).filter(o=>o.e.pid===n.pid || o.dy<near || !H)
+      .sort((p,q)=>p.dy-q.dy)[0];
+    const d = dates.filter(e=>e.pid===n.pid || (e.yc>=n.yc-1 && e.yc-n.yc<H*0.1))
+      .sort((p,q)=>(p.pid===n.pid?-1:0)-(q.pid===n.pid?-1:0) || (p.yc-n.yc)-(q.yc-n.yc))[0];
+    if (!a || !d) continue;
+    const pad = x=>String(x).padStart(2,"0");
+    rows.push({who:n.who, dir:n.dir, amt:a.e.amt, d:`${pad(d.mo)}/${pad(d.da)}`, ts:((d.mo*100+d.da)*100+d.h)*100+d.mi, msg:""});
+  }
+  return rows;
+}
+async function readPP(shots, files){
   ppShots = shots; ppStep("reading");
   $("ppReadingText").textContent = `Reading ${shots.length} screenshot${shots.length>1?"s":""}…`;
-  setTimeout(()=>{
-    ppRows = PP_SAMPLE.map((r,i)=>{
-      if (r.dir==="out") return {...r, i, st:"out", on:false};
-      if (BACKS.some(b=>b.who===r.who && b.amt===r.amt && b.status==="in" && b.method==="paypay")) return {...r, i, st:"dup", on:false};
-      const wait = BACKS.find(b=>b.who===r.who && b.amt===r.amt && b.status==="wait");
-      if (wait) return {...r, i, st:"settle", back:wait, on:true};
-      return {...r, i, st:"new", tx:guessTx(r), on:true};
-    });
-    renderPP(); ppStep("review");
-  }, 1100);
+  let raw = PP_SAMPLE, note = "Sample transfers, not read from a screenshot.";
+  if (files){
+    try {
+      const seen = new Set(); raw = [];
+      for (const f of files){
+        for (const r of parsePayPay(await visionRaw(f))){
+          const key = [r.who, r.dir, r.amt, r.ts].join("|");     // 画面が重なっていても同じ取引は1件
+          if (!seen.has(key)){ seen.add(key); raw.push(r); }
+        }
+      }
+      raw.sort((a,b)=>b.ts-a.ts);
+      note = "Read from your screenshots by Google Cloud Vision. Check each row before logging.";
+      if (!raw.length) throw new Error("No PayPay transfers found. Share the transaction history screen (取引履歴).");
+    } catch(err){
+      ppStep("pick"); toast(err.message || "Could not read the screenshots."); return;
+    }
+  }
+  $("ppNote").textContent = note;
+  ppRows = raw.map((r,i)=>{
+    if (r.dir==="out") return {...r, i, st:"out", on:false};
+    if (BACKS.some(b=>b.who===r.who && b.amt===r.amt && b.date && mdNum(b.date)===mdNum(r.d) && b.status==="in" && b.method==="paypay")) return {...r, i, st:"dup", on:false};
+    const wait = BACKS.find(b=>b.who===r.who && b.amt===r.amt && b.status==="wait");
+    if (wait) return {...r, i, st:"settle", back:wait, on:true};
+    return {...r, i, st:"new", tx:guessTx(r), on:true};
+  });
+  renderPP(); ppStep("review");
 }
 function renderPP(){
   $("ppShots").innerHTML = ppShots.map(s=>`<div class="shot" style="${s.url?`background-image:url(${s.url})`:""}">${s.url?"":s.name}</div>`).join("");
@@ -1135,7 +1189,7 @@ function renderPP(){
 }
 $("ppFile").addEventListener("change", e=>{
   const files = [...e.target.files]; if (!files.length) return;
-  readPP(files.map(f=>({name:f.name, url:URL.createObjectURL(f)})));
+  readPP(files.map(f=>({name:f.name, url:URL.createObjectURL(f)})), files);
 });
 $("ppSample").addEventListener("click", ()=>readPP([{name:"IMG_2063"}]));
 $("ppRows").addEventListener("change", e=>{
@@ -1244,6 +1298,13 @@ function shrinkPhoto(file){
 }
 // Google Cloud Vision で文字を読み取り（Smart Ledger と同じ API・同じキー）、店名・日付・合計・品目を取り出す
 async function readWithVision(file){
+  const res = await visionRaw(file);
+  const text = res?.fullTextAnnotation?.text || res?.textAnnotations?.[0]?.description || "";
+  if (!text) throw new Error("No text was found on this photo.");
+  return parseReceiptText(text);
+}
+// Vision の生の結果（1画像ぶん）を返す。文字の位置も使いたい読み取り（PayPay履歴）で使う
+async function visionRaw(file){
   const key = visionKey();
   if (!key) throw new Error("Add your Google Cloud Vision API key in ••• settings.");
   const image = await shrinkPhoto(file);
@@ -1258,9 +1319,7 @@ async function readWithVision(file){
     if (r.status===403) throw new Error(`Google refused the request: ${msg || "check that the Vision API is enabled and the key allows this site."}`);
     throw new Error(`Google Cloud Vision returned an error${msg?": "+msg:""}.`);
   }
-  const text = d.responses?.[0]?.fullTextAnnotation?.text || d.responses?.[0]?.textAnnotations?.[0]?.description || "";
-  if (!text) throw new Error("No text was found on this photo.");
-  return parseReceiptText(text);
+  return d.responses?.[0] || {};
 }
 const KEYWORDS = [
   ["Clothing", /パンツ|ズボン|スウェット|クロッグ|スリッポン|スニーカー|靴|シャツ|ジャケット|コート|ニット|ワンピース|スカート|ソックス/],
